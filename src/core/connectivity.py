@@ -56,8 +56,9 @@ class Connectivity(QueueMixIn):
 
         self.last_checked[request.peer] = (
             request,
-            asyncio.ensure_future(self._new_check(request)),
+            (fut := asyncio.ensure_future(self._new_check(request))),
         )
+        return await fut
 
     @staticmethod
     async def _new_check(request):
