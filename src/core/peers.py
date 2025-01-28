@@ -83,6 +83,7 @@ referring 1.3 :
         - permanently cache peer's data received
 
 """
+
 import asyncio
 import logging
 import time
@@ -104,26 +105,26 @@ _logger = logging.getLogger(__name__)
 
 # this list contains 20 evenly spread numbers in [0, 2**160]
 node_list_ids = [
-    b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
-    b'\x0c\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc',
-    b'\x19\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x98',
-    b'&ffffffffffffffffffd',
-    b'33333333333333333330',
-    b'?\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xfc',
-    b'L\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xc8',
-    b'Y\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x94',
-    b'fffffffffffffffffff`',
-    b's333333333333333333,',
-    b'\x7f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xf8',
-    b'\x8c\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xc4',
-    b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x90',
-    b'\xa6ffffffffffffffffff\\',
-    b'\xb3333333333333333333(',
-    b'\xbf\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xf4',
-    b'\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xc0',
-    b'\xd9\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x8c',
-    b'\xe6ffffffffffffffffffX',
-    b'\xf3333333333333333333$',
+    b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+    b"\x0c\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",
+    b"\x19\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x98",
+    b"&ffffffffffffffffffd",
+    b"33333333333333333330",
+    b"?\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xfc",
+    b"L\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xc8",
+    b"Y\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x94",
+    b"fffffffffffffffffff`",
+    b"s333333333333333333,",
+    b"\x7f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xf8",
+    b"\x8c\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xc4",
+    b"\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x90",
+    b"\xa6ffffffffffffffffff\\",
+    b"\xb3333333333333333333(",
+    b"\xbf\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xf4",
+    b"\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xc0",
+    b"\xd9\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x8c",
+    b"\xe6ffffffffffffffffffX",
+    b"\xf3333333333333333333$",
 ]
 
 
@@ -156,17 +157,12 @@ class Storage(storage.ForgetfulStorage):
 
 
 class SearchCrawler:
-
     @classmethod
     async def get_relevant_peers_for_list_id(cls, kad_server, list_id):
         peer = RemotePeer(list_id)
         nearest = kad_server.protocol.router.find_neighbors(peer)
         crawler = crawling.NodeSpiderCrawl(
-            kad_server.protocol,
-            peer,
-            nearest,
-            kad_server.ksize,
-            kad_server.alpha
+            kad_server.protocol, peer, nearest, kad_server.ksize, kad_server.alpha
         )
         responsible_nodes = await crawler.find()
         return responsible_nodes
@@ -179,7 +175,9 @@ class SearchCrawler:
         for list_id in node_list_ids:
             peers = await cls.get_relevant_peers_for_list_id(node_server, list_id)
             for peer in peers:
-                _peers = await node_server.protocol.call_search_peers(peer, search_string)
+                _peers = await node_server.protocol.call_search_peers(
+                    peer, search_string
+                )
                 yield _peers
 
 
@@ -238,8 +236,10 @@ class GossipSearch:
                 raise StopAsyncIteration
 
             try:
-                search_response = await asyncio.wait_for(self.reply_queue.get(),
-                                                         timeout=self.timeout - (current_time - self._start_time))
+                search_response = await asyncio.wait_for(
+                    self.reply_queue.get(),
+                    timeout=self.timeout - (current_time - self._start_time),
+                )
                 return search_response
             except asyncio.TimeoutError:
                 raise StopAsyncIteration
@@ -289,7 +289,9 @@ class GossipSearch:
                 m = RemotePeer.load_from(m)
             result_iter.add_peer(m)
         except KeyError as ke:
-            _logger.debug("[GOSSIP][SEARCH] invalid gossip search response id", exc_info=ke)
+            _logger.debug(
+                "[GOSSIP][SEARCH] invalid gossip search response id", exc_info=ke
+            )
 
 
 def get_search_handler():
@@ -353,6 +355,7 @@ async def get_remote_peer_at_every_cost(peer_id) -> Optional[RemotePeer]:
 
 
 # Callbacks called by kademila's routing mechanisms
+
 
 def new_peer(peer):
     Dock.peer_list.add_peer(peer)

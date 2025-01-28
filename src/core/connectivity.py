@@ -19,7 +19,7 @@ class ConnectivityCheckState(enum.IntEnum):
 
 
 class CheckRequest:
-    __slots__ = 'time_stamp', 'peer', 'serious', 'status'
+    __slots__ = "time_stamp", "peer", "serious", "status"
 
     def __init__(self, peer, serious):
         self.time_stamp = time.monotonic()
@@ -31,7 +31,7 @@ class CheckRequest:
 class Connectivity(QueueMixIn):
     _instance = None
     _initialized = False
-    __slots__ = 'last_checked', 'stop_flag'
+    __slots__ = "last_checked", "stop_flag"
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -47,22 +47,24 @@ class Connectivity(QueueMixIn):
         super().__init__(*args, **kwargs)
 
     async def submit(self, request: CheckRequest):
-
         if request.peer in self.last_checked:
             prev_request, fut = self.last_checked[request.peer]
-            if request.time_stamp - prev_request.time_stamp <= const.PING_TIME_CHECK_WINDOW:
+            if (
+                request.time_stamp - prev_request.time_stamp
+                <= const.PING_TIME_CHECK_WINDOW
+            ):
                 return await fut
 
-        self.last_checked[request.peer] = request, (fut := asyncio.ensure_future(self._new_check(request)))
-        return await fut
+        self.last_checked[request.peer] = (
+            request,
+            asyncio.ensure_future(self._new_check(request)),
+        )
 
     @staticmethod
     async def _new_check(request):
+        ping_data = WireData(header=HEADERS.REMOVAL_PING, msg_id=use.get_unique_id(str))
 
-        ping_data = WireData(
-            header=HEADERS.REMOVAL_PING,
-            msg_id=use.get_unique_id(str)
-        )
+        req_dispatcher = Dock.dispatchers[DISPATCHS.REQUESTS]
 
         req_dispatcher = Dock.dispatchers[DISPATCHS.REQUESTS]
 
@@ -83,7 +85,9 @@ class Connectivity(QueueMixIn):
 
             try:
                 request.status = ConnectivityCheckState.CON_CHECK
-                with await connect.connect_to_peer(request.peer, timeout=const.PING_TIMEOUT):
+                with await connect.connect_to_peer(
+                    request.peer, timeout=const.PING_TIMEOUT
+                ):
                     pass
             except OSError:
                 # okay this one is cooked
@@ -97,7 +101,6 @@ class Connectivity(QueueMixIn):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-
         for _, fut in self.last_checked.values():
             if not fut.done():
                 fut.cancel()
