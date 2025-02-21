@@ -9,20 +9,22 @@ from src.avails import const, use
 from src.avails.exceptions import CancelTransfer, InvalidStateError
 from src.transfers import TransferState, thread_pool_for_disk_io
 from src.transfers._logger import logger as _logger
-from src.transfers.abc import AbstractSender, CommonAExitMixIn, CommonExceptionHandlersMixIn
+from src.transfers.abc import (
+    AbstractSender,
+    CommonAExitMixIn,
+    CommonExceptionHandlersMixIn,
+)
 from src.transfers.files._fileobject import FileItem, calculate_chunk_size
 
 
 class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
-    version = const.VERSIONS['FO']
+    version = const.VERSIONS["FO"]
     timeout = const.DEFAULT_TRANSFER_TIMEOUT
 
     def __init__(self, peer_obj, transfer_id, file_list, status_updater):
         self.send_files_task = None
         self.state = TransferState.PREPARING
-        self.file_list = [
-            FileItem(Path(x), seeked=0) for x in file_list
-        ]
+        self.file_list = [FileItem(Path(x), seeked=0) for x in file_list]
         self._file_id = transfer_id
         self.peer_obj = peer_obj
         self.status_updater = status_updater
@@ -39,7 +41,6 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
         self.send_files_task = asyncio.current_task()
 
         for index in range(self._current_file_index, len(self.file_list)):
-
             if self.to_stop:
                 break
             file_item = self.file_list[index]
@@ -52,7 +53,7 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
 
         # end of transfer, signalling that there are no more files
         try:
-            await self.send_func(b'\x00')
+            await self.send_func(b"\x00")
         except Exception as exp:
             self.handle_exception(exp)
 
@@ -64,13 +65,15 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
             self.status_updater.status_setup(
                 prefix=f"sending: {file_item}",
                 initial_limit=file_item.seeked,
-                final_limit=file_item.size
+                final_limit=file_item.size,
             )
             updater = self.status_updater.update_status
-            async with aclosing(send_actual_file(
+            async with aclosing(
+                send_actual_file(
                     self.send_func,
                     file_item,
-            )) as send_file:
+                )
+            ) as send_file:
                 async for seeked in send_file:
                     updater(seeked)
                     if self.to_stop:
@@ -82,9 +85,9 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
     async def _send_file_item(self, file_item):
         try:
             # a signal that says there is more to receive
-            await self.send_func(b'\x01')
+            await self.send_func(b"\x01")
             file_object = bytes(file_item)
-            file_packet = struct.pack('!I', len(file_object)) + file_object
+            file_packet = struct.pack("!I", len(file_object)) + file_object
             await self.send_func(file_packet)
         except Exception as exp:
             self.handle_exception(exp)
@@ -93,7 +96,7 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
         if not self.state == TransferState.PAUSED or self.to_stop is True:
             raise InvalidStateError(f"{self.state=}, {self.to_stop=}")
 
-        _logger.debug(f'FILE[{self._file_id}] changing state to sending')
+        _logger.debug(f"FILE[{self._file_id}] changing state to sending")
         self.state = TransferState.SENDING
         start_file = self.file_list[self._current_file_index]
 
@@ -138,12 +141,12 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
 
 
 async def send_actual_file(
-        send_function,
-        file,
-        *,
-        chunk_len=None,
-        timeout=10,
-        th_pool=thread_pool_for_disk_io,
+    send_function,
+    file,
+    *,
+    chunk_len=None,
+    timeout=10,
+    th_pool=thread_pool_for_disk_io,
 ):
     """Sends file to other end using ``send_function``
 

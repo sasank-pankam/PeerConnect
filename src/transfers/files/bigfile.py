@@ -1,6 +1,7 @@
 import functools
-import sys
-from typing import BinaryIO, TextIO
+from enum import Enum, auto
+from pathlib import Path
+from typing import BinaryIO
 from itertools import count
 import mmap
 import os
@@ -8,42 +9,53 @@ import asyncio
 from collections.abc import Callable
 from contextlib import aclosing
 import struct
-from src.avails import constants
-from src.avails.exceptions import TransferIncomplete
+from src.avails import connect
+from src.avails.exceptions import CancelTransfer, TransferIncomplete
 from src.avails.wire import WireData
+from src.transfers.abc import (
+    AbstractReceiver,
+    AbstractSender,
+    CommonAExitMixIn,
+    CommonExceptionHandlersMixIn,
+)
 from src.transfers.files.receiver import recv_file_contents
 from src.transfers.status import StatusIterator
-from src.transfers.files._fileobject import FileItem, validatename
+from src.transfers.files._fileobject import FileItem
 from src.transfers import thread_pool_for_disk_io
-
 from src.transfers import TransferState
 from src.transfers.files.sender import send_actual_file
-
+from src.avails import const, use
 
 CHUNK_SIZE = 30 * 1024 * 1024
 CHUNK_ID = 0
 
 
-async def bomb():
-    raise Exception(
-        "cancel all tasks in taskgroup"
-    )  # change this to a exxception with specificity
+class ConnectionState(Enum):
+    NOT_DONE = auto()
+    INITIATED = auto()
+    DONE = auto()
 
 
-class Sender:
+class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
+    version = const.VERSIONS["FO"]
+    timeout = const.DEFAULT_TRANSFER_TIMEOUT
+
     def __init__(
-        self, file_path, peer_obj, transfer_id, status_iterator: StatusIterator
+        self, peer_obj, transfer_id, file_path: Path, status_updater: StatusIterator
     ):
-        self.file = FileItem(file_path, seeked=0)
+        self.full_file = FileItem(file_path, seeked=0)
+        self.file = FileItem(file_path.parts[-1], seeked=0)
         self.peer_obj = peer_obj
-        self.id = transfer_id
-        self.status_iter = status_iterator
+        self._file_id = transfer_id
+        self.status_iter = status_updater
         self.io_pairs = {}
         self.io_pair_index_generator = count()
         self.state = TransferState.PREPARING
         self.failed_chunks = []
         self.file_iterator = self.bigfile_chunk_generator()
         self.is_stop = False
+        self.current_sending = set()
+        self._expected_errors = set()
 
     def bigfile_chunk_generator(self):
         size = self.file.size
@@ -54,6 +66,8 @@ class Sender:
             yield id, i, i + CHUNK_SIZE
 
     async def __aenter__(self):
+        self.setup_event = asyncio.get_running_loop().create_future()
+        self.setup_state = ConnectionState.NOT_DONE
         self.state = TransferState.CONNECTING
         self.status_iter.status_setup(
             f"[DIR] receiving file: {self.file}", self.file.seeked, self.file.size
@@ -62,26 +76,71 @@ class Sender:
         await self.task_group.__aenter__()
         return self
 
-    def add_connection(self, pair: tuple[Callable, Callable]):
-        ind = next(self.io_pair_index_generator)
-        self.io_pairs[ind] = pair
-        self.task_group.create_task(self.send(pair, ind))
+    @property
+    def id(self):
+        return self._file_id
 
-    async def send_file(self):
-        async for update in self.status_iter:
-            yield update
+    @property
+    def current_file(self):
+        """Note: different from other senders this may can have multiple active sending chunks"""
+        return tuple(self.current_sending)
+
+    def connection_made(
+        self,
+        sender: Callable[[bytes], None] | connect.Sender,
+        receiver: Callable[[int], bytes] | connect.Receiver,
+    ):
+        """
+        assuming this function is called when a new connection is made to send this file
+        """
+        index = next(self.io_pair_index_generator)
+        pair = (sender, receiver)
+        self.io_pairs[index] = pair
+        self.task_group.create_task(self.send(pair, index))
+
+    async def _ensure_ok(self, index):
+        if self.setup_state == ConnectionState.DONE:
+            return
+
+        if self.setup_state == ConnectionState.INITIATED:
+            await self.setup_event
+            return
+        self.setup_state = ConnectionState.INITIATED
+        await self._negotiate(index)
+        self.setup_state = ConnectionState.DONE
+        self.setup_event.set_result(True)
+
+    async def _negotiate(self, pair_index):
+        sender, _ = self.io_pairs[pair_index]
+        try:
+            # a signal that says there is more to receive
+            await sender(b"\x01")
+            file_object = bytes(self.file)
+            file_packet = struct.pack("!I", len(file_object)) + file_object
+            await sender(file_packet)
+        except Exception as exp:
+            self.handle_exception(exp)
+
+    async def send_files(self):
+        try:
+            async for _ in self.status_iter:
+                yield _
+        except Exception as e:
+            self.handle_exception(e)
 
     async def cancel(self):
         self.is_stop = True
         self.state = TransferState.ABORTING
+        self._expected_errors.add(ct := CancelTransfer())
         await self.status_iter.stop(
             TransferIncomplete("User canceled the transfer")
         )  # review
         for task in self.task_group._tasks:
             # change this to a custom exception that specifically tells that this operation is cancelled
-            task.set_exception(Exception())
+            task.set_exception(ct)
 
     async def send(self, io_pair, index):
+        await self._ensure_ok(index)
         sender, receiver = io_pair
 
         for big_chunk in self.file_iterator:
@@ -90,16 +149,16 @@ class Sender:
             temp_file.size = end
 
             file_send_request = WireData(
-                header="deside something",
+                header="finalize_later",
                 file_id=id,
             )
 
             raw_bytes = bytes(file_send_request)
             data_size = struct.pack("!I", len(raw_bytes))
 
+            self.current_sending.add(big_chunk)
             try:
-                sender(data_size)
-                sender(raw_bytes)
+                await sender(data_size + raw_bytes)
                 async with aclosing(
                     send_actual_file(sender, temp_file)
                 ) as chunk_sender:
@@ -109,6 +168,8 @@ class Sender:
                         self.status_iter.update_status(
                             seeked
                         )  # updating even for a small chunk
+            except Exception as e:
+                self.handle_exception(e)
             finally:
                 if (
                     not temp_file.seeked == temp_file.size
@@ -117,13 +178,16 @@ class Sender:
                     self.failed_chunks.append(big_chunk)
                     del self.io_pairs[index]
                     break
+                self.current_sending.remove(id)
 
     async def continue_transfer(self):
         return
 
     async def __aexit__(self, exec_type, exec_val, exec_tb):
         if exec_type == TransferIncomplete:
-            self.task_group.create_task(bomb())
+            # self.task_group.create_task(_bomb())
+            for tk in self.task_group._tasks:
+                tk.cancel()
         try:
             await self.task_group.__aexit__(None, None, None)
         except* Exception as e:
@@ -137,9 +201,9 @@ class Sender:
         return False
 
 
-if sys.platform == "win32":
+if const.IS_WINDOWS:
     # must be fully qualified name  no reletive paths
-    def windows_merge(fsrc: TextIO, fdst: TextIO):
+    def windows_merge(fsrc: BinaryIO, fdst: BinaryIO):
         src_size = os.path.getsize(fsrc.name)
         dst_size = os.path.getsize(fdst.name)
 
@@ -180,10 +244,12 @@ else:
     merge = others_merge
 
 
-async def merge_all_and_delete(final_file: FileItem, parts: dict[int, FileItem]):
+async def merge_all_and_delete(
+    download_path: Path, final_file: FileItem, parts: dict[int, FileItem]
+):
     files = sorted(parts.items(), key=lambda x: x[0])
 
-    with open(constants.PATH_DOWNLOAD / final_file.path, "ab") as final:
+    with open(download_path / final_file.path, "ab") as final:
         final.seek(0)
 
         async def asyncify_merge(curr: BinaryIO):
@@ -192,58 +258,120 @@ async def merge_all_and_delete(final_file: FileItem, parts: dict[int, FileItem])
             )
 
         for ind, file in files:
-            with open(constants.PATH_DOWNLOAD / file.path, "rb") as curr:
+            with open(download_path / file.path, "rb") as curr:
                 await asyncify_merge(curr)  # Append file2 to file1
 
 
-class Receiver:
-    def __init__(
-        self, file, peer_obj, transfer_id, status_iterator: StatusIterator
-    ) -> None:
-        self.file = FileItem(file, seeked=0)
-        self.peer_obj = peer_obj
-        self.id = transfer_id
-        self.status_iter = status_iterator
-        self.io_pairs = {}
-        self.parts = {}
-        self.state = TransferState.PREPARING
-        self.io_pair_index_generator = count()
-        self.task_group = asyncio.TaskGroup()
-        self.is_stop = False
+class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver):
+    version = const.VERSIONS["FO"]
 
-    def add_connectiond(self, io_pair):
+    def __init__(self, peer_obj, file_id, download_path, status_updater):
+        self.state = TransferState.PREPARING
+        self.peer = peer_obj
+        self._file_id = file_id
+        self.download_path = download_path
+        self.to_stop = False  # only set when Receiver.cancel is called
+        self.file = FileItem(download_path, seeked=0)
+        self.io_pairs = {}
+        self.io_pair_index_generator = count()
+        self.status_iter = status_updater
+        self._expected_errors = set()
+        self.task_group = asyncio.TaskGroup()
+        self.parts = {}
+        self.current_receiving = set()
+
+    def connection_made(
+        self,
+        sender: Callable[[bytes], None] | connect.Sender,
+        receiver: Callable[[int], bytes] | connect.Receiver,
+    ):
         ind = next(self.io_pair_index_generator)
-        self.io_pairs[ind] = io_pair
-        self.task_group.create_task(self.recv(io_pair, ind))
+        pair = (sender, receiver)
+        self.io_pairs[ind] = pair
+        self.task_group.create_task(self.recv(pair, ind))
+
+    async def _ensure_ok(self, index):
+        if self.setup_state == ConnectionState.DONE:
+            return
+
+        if self.setup_state == ConnectionState.INITIATED:
+            await self.setup_event
+            return
+        self.setup_state = ConnectionState.INITIATED
+        try:
+            await self._negotiate(index)
+        except Exception:
+            self.setup_state = ConnectionState.NOT_DONE
+            raise
+        self.setup_state = ConnectionState.DONE
+        self.setup_event.set_result(True)
+
+    async def _negotiate(self, pair_index):
+        sender, receiver = self.io_pairs[pair_index]
+        handshake_byte = await receiver(1)
+        if handshake_byte != b"\x01":
+            raise ValueError(f"Excepted a '\\x01 but received {handshake_byte=}")
+
+        try:
+            file_item_size = await use.recv_int(receiver)
+        except ValueError as ve:
+            raise TransferIncomplete from ve
+        try:
+            raw_file_item = await receiver(file_item_size)
+        except OSError as oe:
+            raise TransferIncomplete from oe
+        else:
+            self.file = FileItem.load_from(raw_file_item, self.download_path)
 
     async def __aenter__(self):
+        self.setup_state = ConnectionState.NOT_DONE
+        self.setup_event = asyncio.get_running_loop().create_future()
         self.status_iter.status_setup(
             f"[DIR] receiving file: {self.file}", self.file.seeked, self.file.size
         )
         await self.task_group.__aenter__()
         return self
 
-    async def recv_file(self):
-        async for status in self.status_iter:
-            yield status
+    async def recv_files(self):
+        async for _ in self.status_iter:
+            yield _
+
+    @property
+    def id(self):
+        return self._file_id
+
+    @property
+    def current_file(self):
+        """Note: different from other senders this may can have multiple active sending chunks"""
+        return tuple(self.current_receiving)
 
     async def recv(self, io_pair: tuple[Callable, Callable], ind: int):
-        sender, receiver = io_pair
+        await self._ensure_ok(ind)
 
+        sender, receiver = io_pair
         while self.is_stop:
-            data_length = struct.unpack("!I", await receiver(4))[0]
+            data_length = use.recv_int(
+                receiver
+            )  # finalize_later  decide to handle exception(ValueError)
+
             data = WireData.load_from(await receiver(data_length))
 
             file_id = data.body["file_id"]
+            self.current_receiving.add(file_id)
             new_file = FileItem(
-                self.file.path.stem + file_id + constants.FILE_ERROR_EXT, seeked=0
+                f"{self.file.path.stem}[{file_id}]{constants.FILE_ERROR_EXT}", seeked=0
             )
 
-            validatename(new_file, constants.PATH_DOWNLOAD)
+            if new_file.path.exists():
+                new_file.path.unlink()
+
+            new_file.path.touch()
+
+            # validatename(new_file, constants.PATH_DOWNLOAD)
             try:
                 async for update in recv_file_contents(
                     receiver,
-                    FileItem(constants.PATH_DOWNLOAD / new_file.path, seeked=0),
+                    FileItem(self.download_path / new_file.path, seeked=0),
                 ):
                     self.status_iter.update_status(update)
             finally:
@@ -252,6 +380,7 @@ class Receiver:
                     new_file.path.unlink()  # delete the incomplete file
                     return
             self.parts[file_id] = new_file
+            self.current_receiving.remove(file_id)
 
     async def continue_recv(self):
         return
@@ -259,16 +388,19 @@ class Receiver:
     async def cancel(self):
         self.is_stop = True
         self.state = TransferState.ABORTING
+        self._expected_errors.add(ct := CancelTransfer())
         await self.status_iter.stop(
             TransferIncomplete("User canceled the transfer")
         )  # review
         for task in self.task_group._tasks:
-            task.set_exception(Exception())
+            task.set_exception(ct)
 
     async def __aexit__(self, e_type, e_val, e_tb):
         # todo check for raised errors
         if e_type == TransferIncomplete:
-            self.task_group.create_task(bomb())
+            # self.task_group.create_task(_bomb())
+            for tk in self.task_group._tasks:
+                tk.cancel()  # finalize_later
 
         try:
             await self.task_group.__aexit__(None, None, None)
@@ -279,4 +411,4 @@ class Receiver:
                 ) from e.exceptions[0]
             raise e.exceptions[0]
 
-        await merge_all_and_delete(self.file, self.parts)
+        await merge_all_and_delete(self.download_path, self.file, self.parts)
