@@ -1,3 +1,4 @@
+from asyncio.exceptions import CancelledError
 import functools
 from enum import Enum, auto
 from pathlib import Path
@@ -56,6 +57,7 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
         self.is_stop = False
         self.current_sending = set()
         self._expected_errors = set()
+        self.main_task = None
 
     def bigfile_chunk_generator(self):
         size = self.file.size
@@ -72,8 +74,7 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
         self.status_iter.status_setup(
             f"[DIR] receiving file: {self.file}", self.file.seeked, self.file.size
         )
-        self.task_group = asyncio.TaskGroup()
-        await self.task_group.__aenter__()
+        self.task_group = set()
         return self
 
     @property
@@ -96,7 +97,8 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
         index = next(self.io_pair_index_generator)
         pair = (sender, receiver)
         self.io_pairs[index] = pair
-        self.task_group.create_task(self.send(pair, index))
+        task = asyncio.create_task(self.send(pair, index))
+        self.task_group.add(task)
 
     async def _ensure_ok(self, index):
         if self.setup_state == ConnectionState.DONE:
@@ -122,9 +124,14 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
             self.handle_exception(exp)
 
     async def send_files(self):
+        self.main_task = asyncio.current_task()
         try:
             async for _ in self.status_iter:
                 yield _
+        except CancelledError:
+            await self.cancel()
+            raise
+
         except Exception as e:
             self.handle_exception(e)
 
@@ -135,9 +142,9 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
         await self.status_iter.stop(
             TransferIncomplete("User canceled the transfer")
         )  # review
-        for task in self.task_group._tasks:
+        for task in self.task_group:
             # change this to a custom exception that specifically tells that this operation is cancelled
-            task.set_exception(ct)
+            task.cancel(ct)
 
     async def send(self, io_pair, index):
         await self._ensure_ok(index)
@@ -168,8 +175,11 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
                         self.status_iter.update_status(
                             seeked
                         )  # updating even for a small chunk
-            except Exception as e:
-                self.handle_exception(e)
+            except BaseException as e:
+                if len(e.args):
+                    self.handle_exception(e.args[0])
+                else:
+                    raise
             finally:
                 if (
                     not temp_file.seeked == temp_file.size
@@ -185,19 +195,10 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
 
     async def __aexit__(self, exec_type, exec_val, exec_tb):
         if exec_type == TransferIncomplete:
-            # self.task_group.create_task(_bomb())
-            for tk in self.task_group._tasks:
+            for tk in self.task_group:
                 tk.cancel()
-        try:
-            await self.task_group.__aexit__(None, None, None)
-        except* Exception as e:
-            if not self.is_stop:
-                self.state = TransferState.PAUSED
-                raise TransferIncomplete(
-                    "Error in sending contents from sender receiver pair"
-                ) from e.exceptions[0]
-            raise e.exceptions[0]
-
+            return True
+        await asyncio.gather(*self.task_group)
         return False
 
 
@@ -276,9 +277,10 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
         self.io_pair_index_generator = count()
         self.status_iter = status_updater
         self._expected_errors = set()
-        self.task_group = asyncio.TaskGroup()
         self.parts = {}
+        self.task_group = set()
         self.current_receiving = set()
+        self.main_task = None
 
     def connection_made(
         self,
@@ -288,7 +290,8 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
         ind = next(self.io_pair_index_generator)
         pair = (sender, receiver)
         self.io_pairs[ind] = pair
-        self.task_group.create_task(self.recv(pair, ind))
+        task = asyncio.create_task(self.recv(pair, ind))
+        self.task_group.add(task)
 
     async def _ensure_ok(self, index):
         if self.setup_state == ConnectionState.DONE:
@@ -329,12 +332,16 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
         self.status_iter.status_setup(
             f"[DIR] receiving file: {self.file}", self.file.seeked, self.file.size
         )
-        await self.task_group.__aenter__()
         return self
 
     async def recv_files(self):
-        async for _ in self.status_iter:
-            yield _
+        self.main_task = asyncio.current_task()
+        try:
+            async for _ in self.status_iter:
+                yield _
+        except CancelledError:
+            await self.cancel()
+            raise
 
     @property
     def id(self):
@@ -374,6 +381,11 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
                     FileItem(self.download_path / new_file.path, seeked=0),
                 ):
                     self.status_iter.update_status(update)
+            except BaseException as e:
+                if len(e.args):
+                    self.handle_exception(e.args[0])  # handle custom cancel
+                else:
+                    raise  # only raise for innterrupts
             finally:
                 if new_file.seeked < CHUNK_SIZE:
                     # this chunk is not completelty done
@@ -392,23 +404,14 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
         await self.status_iter.stop(
             TransferIncomplete("User canceled the transfer")
         )  # review
-        for task in self.task_group._tasks:
+        for task in self.task_group:
             task.set_exception(ct)
 
     async def __aexit__(self, e_type, e_val, e_tb):
         # todo check for raised errors
         if e_type == TransferIncomplete:
-            # self.task_group.create_task(_bomb())
-            for tk in self.task_group._tasks:
+            for tk in self.task_group:
                 tk.cancel()  # finalize_later
-
-        try:
-            await self.task_group.__aexit__(None, None, None)
-        except* Exception as e:
-            if not self.is_stop:
-                raise TransferIncomplete(
-                    "Error in sending contents from sender receiver pair"
-                ) from e.exceptions[0]
-            raise e.exceptions[0]
+        await asyncio.gather(*self.task_group)
 
         await merge_all_and_delete(self.download_path, self.file, self.parts)
