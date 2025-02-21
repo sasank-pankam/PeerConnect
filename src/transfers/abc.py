@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from contextlib import AbstractAsyncContextManager
-from typing import Callable
+from typing import Callable, Generator
 
 from src.avails import connect, const
 from src.avails.exceptions import CancelTransfer, TransferIncomplete
@@ -9,7 +9,6 @@ from src.transfers._logger import logger
 
 
 class AbstractTransferHandle(AbstractAsyncContextManager, ABC):
-
     @abstractmethod
     async def continue_transfer(self):
         """
@@ -17,8 +16,11 @@ class AbstractTransferHandle(AbstractAsyncContextManager, ABC):
         """
 
     @abstractmethod
-    def connection_made(self, sender: Callable[[bytes], None] | connect.Sender,
-                        receiver: Callable[[int], bytes] | connect.Receiver):
+    def connection_made(
+        self,
+        sender: Callable[[bytes], None] | connect.Sender,
+        receiver: Callable[[int], bytes] | connect.Receiver,
+    ):
         """Connection has arrived that is related to this handle
 
         Args:
@@ -54,16 +56,13 @@ class AbstractTransferHandle(AbstractAsyncContextManager, ABC):
 
 
 class AbstractSender(AbstractTransferHandle, ABC):
-    """
-
-
-    """
+    """ """
 
     @abstractmethod
     def __init__(self, peer_obj, transfer_id, file_list, status_updater): ...
 
     @abstractmethod
-    async def send_files(self):
+    async def send_files(self) -> Generator:
         """Send files passed into object's constructor"""
 
 
@@ -102,7 +101,7 @@ class CommonAExitMixIn(AbstractAsyncContextManager):
 
 class CommonExceptionHandlersMixIn:
     def _raise_transfer_incomplete_and_change_state(self, prev_error=None, detail=""):
-        logger.debug(f'{self._log_prefix} changing state to paused')
+        logger.debug(f"{self._log_prefix} changing state to paused")
         self.state = TransferState.PAUSED
         err = TransferIncomplete(detail)
         err.__cause__ = prev_error
@@ -120,7 +119,10 @@ class CommonExceptionHandlersMixIn:
     def _handle_cancel_transfer(self, ct):
         if ct in self._expected_errors:
             # we definitely reach here if we are cancelled using AbstractTransferHandle.cancel
-            logger.error(f"{self._log_prefix} cancelled receiving, changing state to ABORTING", exc_info=True)
+            logger.error(
+                f"{self._log_prefix} cancelled receiving, changing state to ABORTING",
+                exc_info=True,
+            )
             self.state = TransferState.ABORTING
         else:
             raise
