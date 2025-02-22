@@ -16,7 +16,7 @@ install() {
     $runner -m pip install --upgrade pip > /dev/null
     echo "Found pip"
     echo "Installing missing dependencies"
-    $runner -m pip install -r $base_dir/bin/requirements.txt > /dev/null
+    $runner -m pip install -r "$base_dir/bin/requirements.txt" > /dev/null
     echo "Installed dependencies sucessfully"
 }
 
@@ -40,7 +40,7 @@ if [ ! -f "$venv_dir/bin/activate" ]; then
 fi
 
 
-if source $venv_dir/bin/activate 2>/dev/null; then
+if source "$venv_dir/bin/activate" 2>/dev/null; then
     echo "Activated Virtual environment..."
 else
   re_setup
@@ -57,7 +57,7 @@ if [ "$lines" -ne 32 ]; then
   install
 fi
 
-cd $base_dir
+cd $base_dir || exit
 $runner main.py
 
 deactivate
@@ -67,4 +67,3 @@ read -p -r "Clear screen before setup? (y/n): " CLEAR_SCREEN
 if [[ "$CLEAR_SCREEN" == [Yy] ]]; then
     clear
 fi
- # --force-reinstall
