@@ -24,6 +24,7 @@ The primary goal of PeerConnect is to provide fast and efficient data transfers 
 - Distributed Reputation System
 - Encryption
 - A good test suite
+- Application is not Chaos-Tested for network partitions
 
 ### Future Plans
 
