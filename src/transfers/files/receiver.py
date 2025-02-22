@@ -53,24 +53,25 @@ class Receiver(CommonAExitMixIn, PauseMixIn, CommonExceptionHandlersMixIn, Abstr
                     yield _
 
         self.state = TransferState.COMPLETED
-        _logger.info(f'completed transfer: {self.file_items}')
+        _logger.info(f"completed transfer: {self.file_items}")
 
     async def _should_proceed(self):
         if self.to_stop:
-            return b''
+            return b""
 
         try:
             what = await self.recv_func(1)
             # check again, what if context switch happened
             if self.to_stop:
-                return b''
+                return b""
         except Exception as e:
             self.handle_exception(e)
         else:
-            if what == b'\x00':
+            if what == b"\x00":
                 _logger.info(
-                    f"{self._log_prefix} received end of transfer signal, finalizing file recv loop, changing state to COMPLETED")
-                return b''
+                    f"{self._log_prefix} received end of transfer signal, finalizing file recv loop, changing state to COMPLETED"
+                )
+                return b""
 
             return what
 
@@ -105,7 +106,9 @@ class Receiver(CommonAExitMixIn, PauseMixIn, CommonExceptionHandlersMixIn, Abstr
     async def _receive_single_file(self):
         validatename(file_item=self.current_file, root_path=self.download_path)
         receiver = recv_file_contents(self.recv_func, self.current_file)
-        self.status_updater.status_setup(self._status_string_prefix, self.current_file.seeked, self.current_file.size)
+        self.status_updater.status_setup(
+            self._status_string_prefix, self.current_file.seeked, self.current_file.size
+        )
 
         status_updater = self.status_updater.update_status
 
@@ -134,13 +137,13 @@ class Receiver(CommonAExitMixIn, PauseMixIn, CommonExceptionHandlersMixIn, Abstr
 
         self.recv_files_task = asyncio.current_task()
 
-        _logger.debug(f'FILE[{self._file_id}] changing state to receiving')
+        _logger.debug(f"FILE[{self._file_id}] changing state to receiving")
         self.state = TransferState.RECEIVING
         await self.connection_wait
 
         try:
             # synchronizing last received file seek
-            await self.send_func(struct.pack('!Q', self.current_file.seeked))
+            await self.send_func(struct.pack("!Q", self.current_file.seeked))
         except Exception as exp:
             self.handle_exception(exp)
 

@@ -37,6 +37,7 @@ class Sender(CommonExceptionHandlersMixIn, PauseMixIn, CommonAExitMixIn, Abstrac
         self.state = TransferState.SENDING
         self.send_files_task = asyncio.current_task()
 
+        # TODO: change to while (list is changing)
         for index in range(self._current_file_index, len(self.file_list)):
             if self.to_stop:
                 break
@@ -182,11 +183,11 @@ async def send_actual_file(
                 th_pool,
                 f_mapped.__getitem__,
             )
-
+            wait_for = asyncio.wait_for
             for offset in range(seek, file.size, chunk_size):
                 chunk = await asyncify(slice(offset, offset + chunk_size))
 
-                await asyncio.wait_for(send_function(chunk), timeout)
+                await wait_for(send_function(chunk), timeout)
                 seek += len(chunk)
                 file.seeked = seek
                 yield seek

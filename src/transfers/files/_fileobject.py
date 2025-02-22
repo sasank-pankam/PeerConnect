@@ -63,7 +63,7 @@ class FileItem:
         name, size, seeked = umsgpack.loads(data)
 
         if const.IS_WINDOWS:
-            name = name.replace('\\', '_')
+            name = name.replace("\\", "_")
 
         file = FileItem(Path(file_parent_path, name), seeked)
         file._name = name
