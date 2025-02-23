@@ -2,10 +2,13 @@ from asyncio import CancelledError, InvalidStateError
 import asyncio
 from contextlib import aclosing
 from enum import auto, Enum
+import functools
 from itertools import count
+import mmap
+import os
 from pathlib import Path
 import struct
-from typing import Callable
+from typing import BinaryIO, Callable
 from src.avails.exceptions import CancelTransfer, TransferIncomplete
 from src.avails import use
 from src.transfers import TransferState
@@ -18,11 +21,10 @@ from src.transfers.abc import (
 from src.avails import connect, const
 from src.transfers.files._fileobject import FileItem
 from src.transfers.status import StatusIterator
+from src.transfers._logger import logger as _logger
+from src.transfers import thread_pool_for_disk_io
 from .sender import Sender as list_file_sender
 from .receiver import Receiver as list_file_receiver
-
-CHUNK_SIZE = 30 * 1024 * 1024
-CHUNK_ID = 0
 
 
 class _ConnectionState(Enum):
@@ -62,13 +64,14 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
     def _bigfile_chunk_generator(self):
         size = self.big_file.size
         start = 0
-        for id, i in enumerate(range(start, size, CHUNK_SIZE)):
+        for id, i in enumerate(range(start, size, const.BIG_CHUNK_SIZE)):
             if len(self.failed_chunks):
                 yield True, self.failed_chunks.pop(0)
-            yield False, (id, i, i + CHUNK_SIZE)
+            yield False, (id, i, i + const.BIG_CHUNK_SIZE)
 
     async def send_files(self):
         self.main_task = asyncio.current_task()
+        _logger.debug(f"{self._log_prefix} changing state to sending")
         try:
             async for _ in self.status_updater:
                 yield _
@@ -91,7 +94,7 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
             task.cancel(ct)
 
     async def __aenter__(self):
-        self.setup_event = asyncio.get_running_loop().create_future()
+        self.setup_event = asyncio.Event()
         self.setup_state = _ConnectionState.NOT_DONE
         self.state = TransferState.CONNECTING
         self.status_updater.status_setup(
@@ -167,18 +170,16 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
 
             self.current_parts.remove(big_chunk)
 
-    # TODO: rethink this method will not work if other connections are also failed (wait in the whilee loop until it is set)
     async def _ensure_ok(self, pair):
+        while self.setup_state == _ConnectionState.INITIATED:
+            await self.setup_event.wait()
         if self.setup_state == _ConnectionState.DONE:
             return
-
-        if self.setup_state == _ConnectionState.INITIATED:
-            await self.setup_event
-            return
+        # this is reachable when self.setup_state == not done
         self.setup_state = _ConnectionState.INITIATED
         await self._negotiate(pair)
         self.setup_state = _ConnectionState.DONE
-        self.setup_event.set_result(True)
+        self.setup_event.set()
 
     async def _negotiate(self, pairs):
         sender, receiver = pairs
@@ -191,7 +192,7 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
             sig = await receiver(1)
             if sig != b"\x01":
                 self.setup_state = _ConnectionState.NOT_DONE
-                self.setup_event.set_result(True)
+                self.setup_event.set()
                 raise ValueError("Handeshake not complete")
         except Exception as exp:
             self.handle_exception(exp)
@@ -207,13 +208,81 @@ class Sender(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractSender):
         if not self.state == TransferState.PAUSED or self.to_stop is True:
             raise InvalidStateError(f"{self.state=}, {self.to_stop=}")
 
-        # _logger.debug(f"FILE[{self._tf_id}] changing state to sending")
+        _logger.debug(f"FILE[{self._tf_id}] changing state to sending")
         self.state = TransferState.SENDING
 
         # continuing with remaining transfer
         async with aclosing(self.send_files()) as file_sender:
             async for items in file_sender:
                 yield items
+
+
+if const.IS_WINDOWS:
+    # must be fully qualified name  no reletive paths
+    def windows_merge(fsrc: BinaryIO, fdst: BinaryIO):
+        src_size = os.path.getsize(fsrc.name)
+        dst_size = os.path.getsize(fdst.name)
+
+        # Align to allocation granularity (64KB on Windows)
+        allocation_granularity = mmap.ALLOCATIONGRANULARITY
+        aligned_offset = (dst_size // allocation_granularity) * allocation_granularity
+        map_size = dst_size + src_size - aligned_offset
+
+        # Extend destination file
+        fdst.truncate(dst_size + src_size)
+
+        # Memory map source file
+        src_map = mmap.mmap(fsrc.fileno(), src_size, access=mmap.ACCESS_READ)
+
+        try:
+            # Memory map destination file
+            dst_map = mmap.mmap(
+                fdst.fileno(),
+                map_size,
+                access=mmap.ACCESS_WRITE,
+                offset=aligned_offset,
+            )
+
+            # Calculate write position relative to mapped region
+            write_pos = dst_size - aligned_offset
+            dst_map[write_pos : write_pos + src_size] = src_map[:]
+        finally:
+            src_map.close()
+            dst_map.close()
+
+    merge = windows_merge
+
+else:
+    # must be fully qualified name  no reletive paths
+    def others_merge(fsrc: BinaryIO, fdst: BinaryIO):
+        os.sendfile(fsrc.fileno(), fdst.fileno(), 0, os.path.getsize(fdst.name))
+
+    merge = others_merge
+
+
+async def merge_all_and_delete(
+    download_path: Path, final_file: FileItem, parts: dict[int, FileItem]
+):
+    files = sorted(parts.items(), key=lambda x: x[0])
+
+    with open(download_path / final_file.name, "ab") as final:
+        final.seek(0)
+
+        async def asyncify_merge(curr: BinaryIO):
+            await asyncio.get_running_loop().run_in_executor(
+                thread_pool_for_disk_io, functools.partial(merge, final, curr)
+            )
+
+        for ind, file in files:
+            with open(download_path / file.path, "rb") as curr:
+                await asyncify_merge(curr)  # Append file2 to file1
+
+
+async def delete_all(download_path, paths):
+    for path in paths.values():
+        full_path = download_path / path
+        if full_path.exists():
+            full_path.unlink()
 
 
 class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver):
@@ -232,17 +301,19 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
         self.current_parts = set()
         self.main_task = None
         self.failed_chunks = {}
+        self.parts = {}
 
         self.task_group = set()
         self.to_stop = False
 
         self.state = TransferState.PREPARING
         self.big_file: FileItem | None = None
-
         self._expected_errors = set()
 
     async def recv_files(self):
         self.main_task = asyncio.current_task()
+        _logger.debug(f"{self._log_prefix} changing state to receiving")
+        self.state = TransferState.RECEIVING
         try:
             async for _ in self.status_updater:
                 yield _
@@ -261,11 +332,12 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
             TransferIncomplete("User canceled the transfer")
         )  # review
         for task in self.task_group:
-            # change this to a custom exception that specifically tells that this operation is cancelled
             task.cancel(ct)
+        _logger.info("Removing all big chunks.")
+        await delete_all(self.download_path, self.parts)
 
     async def __aenter__(self):
-        self.setup_event = asyncio.get_running_loop().create_future()
+        self.setup_event = asyncio.Event()
         self.setup_state = _ConnectionState.NOT_DONE
         self.state = TransferState.CONNECTING
         self.task_group = set()
@@ -277,6 +349,7 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
                 tk.cancel()
             return True
         await asyncio.gather(*self.task_group)
+        await merge_all_and_delete(self.download_path, self.big_file, self.parts)
         return False
 
     @property
@@ -294,7 +367,7 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
         receiver: Callable[[int], bytes] | connect.Receiver,
     ):
         """
-        assuming this function is called when a new connection is made to send this file
+        assuming this function is called when a new conWhatnection is made to send this file
         """
         index = next(self.receivers_id)
         pair = (sender, receiver)
@@ -320,31 +393,43 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
                 seeked=temp_file.seeked,
             )
 
-            ctrl = await receiver(1)
-            if (
-                ctrl == "\x00"
-            ):  # this is the metadata part(especially the chunk is already there or not)
-                await self._recover(id, sender, temp_file)
+            try:
+                ctrl = await receiver(1)
+                if (
+                    ctrl == "\x00"
+                ):  # this is the metadata part(especially the chunk is already there or not)
+                    await self._recover(id, sender, temp_file)
 
-            files_receiver._current_file = temp_file
-            async with aclosing(files_receiver._receive_single_file()) as loop:
-                async for seeked in loop:
-                    pass  # skipping the upadte for small file sending part
+                files_receiver._current_file = temp_file
+                async with aclosing(files_receiver._receive_single_file()) as loop:
+                    async for seeked in loop:
+                        pass  # skipping the upadte for small file sending part
 
-            ack = b"\x01"
-            await sender(ack)
+                ack = b"\x01"
+                await sender(ack)
+            except CancelledError as c:
+                if len(c.args):
+                    self.failed_chunks[id] = seeked
+                    self.handle_exception(c.args[0])
+                else:
+                    raise
+            except Exception as e:
+                self.failed_chunks[id] = seeked
+                self.handle_exception(e)
+            finally:
+                del self.receivers[index]
+            self.parts[id] = temp_file
 
     async def _ensure_ok(self, pair):
-        if self.setup_state == _ConnectionState.DONE:
-            return
+        while self.setup_state == _ConnectionState.INITIATED:
+            await self.setup_event.wait()
 
-        if self.setup_state == _ConnectionState.INITIATED:
-            await self.setup_event
+        if self.setup_state == _ConnectionState.DONE:
             return
         self.setup_state = _ConnectionState.INITIATED
         await self._negotiate(pair)
         self.setup_state = _ConnectionState.DONE
-        self.setup_event.set_result(True)
+        self.setup_event.set()
 
     async def _negotiate(self, pair):
         sender, receiver = pair
@@ -364,6 +449,8 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
                 self.big_file.size,
             )
         except Exception as exp:
+            self.setup_state = _ConnectionState.NOT_DONE
+            self.setup_event.set()
             self.handle_exception(exp)
 
     async def _recover(self, id, sender, temp_file: FileItem):
@@ -375,13 +462,14 @@ class Receiver(CommonAExitMixIn, CommonExceptionHandlersMixIn, AbstractReceiver)
             self._raise_transfer_incomplete_and_change_state(ve)
 
     async def continue_transfer(self):
+        self.main_task = asyncio.current_task()
         if not self.state == TransferState.PAUSED or self.to_stop is True:
             raise InvalidStateError(f"{self.state=}, {self.to_stop=}")
 
-        # _logger.debug(f"FILE[{self._tf_id}] changing state to sending")
-        self.state = TransferState.SENDING
+        _logger.debug(f"FILE[{self._tf_id}] changing state to receiving")
+        self.state = TransferState.RECEIVING
 
         # continuing with remaining transfer
-        async with aclosing(self.recv_files()) as file_sender:
-            async for items in file_sender:
+        async with aclosing(self.recv_files()) as file_receiver:
+            async for items in file_receiver:
                 yield items
