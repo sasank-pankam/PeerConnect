@@ -8,13 +8,14 @@ for %%A in ("%base_dir%") do set "base_dir=%%~fA"
 set "venv_dir=%base_dir%\.venv"
 set "req_file=%base_dir%\requirements.txt"
 set "flag_file=%script_dir%.setup_completed"
+set "app_module=src"
 
 :: Check for existing setup
 if exist "%flag_file%" (
     echo Existing setup detected. Launching application...
     call "%venv_dir%\Scripts\activate.bat" && (
         cd /d "%base_dir%"
-        python -m main
+        python -m "%app_module%"
         deactivate
     )
     exit /b 0
@@ -63,7 +64,7 @@ echo Setup completed successfully. Created verification flag.
 
 :: Launch application
 cd /d "%base_dir%"
-python -m main || (
+python -m "%app_module%" || (
     echo Application failed to start
     exit /b 1
 )
