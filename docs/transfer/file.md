@@ -36,13 +36,12 @@ The `Sender` class encapsulates the entire lifecycle of a file transfer. It leve
 
 The `Sender` module integrates closely with other components in the PeerConnect ecosystem. For example, the file manager coordinates between sender instances and the network layer, ensuring that connections are properly established and maintained during a transfer.
 
-> For detailed code structure and error-handling routines, refer to the Sender class implementation in the [source code](https://github.com/ShaikAli65/PeerConnect/blob/dev/src/transfers/files/sender.py).
+> For detailed code structure and error-handling routines, refer to the Sender class implementation in the [source code](/src/transfers/files/sender.py).
 ---
 
+## File Receiver Module
 
-# File Receiver Module
-
-This module is responsible for receiving file data sent by a remote peer. It defines the `Receiver` class, which coordinates the reception of file chunks, writes these chunks to disk, and manages transfer state and metadata. A specialized subclass, `DirReceiver`, is also defined to handle [directory](https://github.com/ShaikAli65/PeerConnect/blob/dev/docs/managers/directory.md) transfers.
+This module is responsible for receiving file data sent by a remote peer. It defines the `Receiver` class, which coordinates the reception of file chunks, writes these chunks to disk, and manages transfer state and metadata. A specialized subclass, `DirReceiver`, is also defined to handle [directory](/docs/managers/directory.md) transfers.
 
 ### Overview
 
@@ -55,7 +54,7 @@ The file receiver module implements a robust, asynchronous mechanism for file re
   Uses metadata (such as file size and target file paths) to correctly map incoming data to the right file. This ensures that multiple files can be sent over a single continuous byte stream.
 
 - **State Management:**  
-  The receiver maintains an [internal state machine](https://github.com/ShaikAli65/PeerConnect/blob/dev/src/transfers/__init__.py) to track progress and handle errors.
+  The receiver maintains an [internal state machine](/src/transfers/__init__.py) to track progress and handle errors.
 
 ### Key Components
 
@@ -91,4 +90,6 @@ The file receiver module implements a robust, asynchronous mechanism for file re
 
 The Receiver module is integrated into the broader PeerConnect file transfer framework. It works in tandem with the Sender module and higher-level managers that coordinate transfers. The use of asynchronous generators allows for progress updates to be streamed back to the UI or logging components in real time.
 
-> For more implementation details, see the [source code](https://github.com/ShaikAli65/PeerConnect/blob/dev/src/transfers/files/receiver.py) for the Receiver class.
+> For more implementation details, see the [source code](/src/transfers/files/receiver.py) for the Receiver class.
+
+[back](/docs/transfer)

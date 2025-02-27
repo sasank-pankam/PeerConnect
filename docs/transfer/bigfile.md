@@ -3,6 +3,7 @@
 This document provides a comprehensive overview of the protocol used for transferring large files (over 2GB) by leveraging multiple network streams to optimize bandwidth utilization.
 
 ## Table of Contents
+
 - [Introduction](#introduction)
 - [Challenges in Large File Transfers](#challenges-in-large-file-transfers)
 - [System Design Overview](#system-design-overview)
@@ -30,14 +31,16 @@ To address these issues, the protocol utilizes a multi-stream approach inspired 
 ### Sender’s Perspective
 
 #### Setup Phase
+
 1. **API Initialization:**  
-   - The transfer is initiated at the **Manager API** level, which coordinates multiple connection requests via the [Connector API](https://github.com/ShaikAli65/PeerConnect/blob/dev/docs/core/connector.md).
+   - The transfer is initiated at the **Manager API** level, which coordinates multiple connection requests via the [Connector API](/docs/core/connector.md).
 2. **Negotiation:**  
    - A big file transfer session is negotiated between peers.
 3. **Handle Creation:**  
    - BigFile handles are created at both the sender and receiver ends, with synchronized identifiers.
 
 #### Transfer Phase
+
 1. **Chunking the File:**  
    - The large file is segmented into *big chunks*. Each chunk is assigned a unique ID.
 2. **Dynamic Connection Management:**  
@@ -47,19 +50,22 @@ To address these issues, the protocol utilizes a multi-stream approach inspired 
    **Detail**: When connection arrives, a task is spwaned and that task requests a big chunk inside BigFile handle, this happens every time a big chunk is sent
 4. **Data Framing:**  
    - Each big chunk is further divided into smaller sub-chunks and transmitted in frames. The frame format is as follows:
-     ```
+
+     ```plaintext
      [big chunk ID] [chunk] [chunk] ... [big chunk]
      ```
+
 5. **Resilience:**  
    - The transfer handle preserves state to manage any network disruptions.
 6. **UI Updates:**  
    - Incremental updates are provided to the user interface using Python’s generator API.
 
 #### Finalization Phase
+
 1. **Completion Check:**  
    - After all big chunks are transferred, resources are returned to the Manager API.
 2. **Resource Release:**  
-   - The Manager API then releases the resources back to the [Connector API](https://github.com/ShaikAli65/PeerConnect/blob/dev/docs/core/connector.md).
+   - The Manager API then releases the resources back to the [Connector API](/docs/core/connector.md).
 
 ### Receiver’s Perspective
 
@@ -69,7 +75,8 @@ To address these issues, the protocol utilizes a multi-stream approach inspired 
    - Multiple connections are established to receive the incoming big chunks asynchronously.
 3. **File Handling:**  
    - For every big chunk received, a new temporary file is created using the following naming convention:
-     ```
+
+     ```plaintext
      [filename].[big chunk id].[big chunk id].unconfirmed
      ```
 
@@ -78,6 +85,7 @@ To address these issues, the protocol utilizes a multi-stream approach inspired 
 Efficient reassembly of the file from its big chunks is crucial. Two merging strategies are considered:
 
 ### Eager Merging
+
 - **Incremental Merging:**  
   - As soon as adjacent big chunks (with consecutive IDs) are received, they are merged immediately.
 - **File Renaming:**  
@@ -91,6 +99,7 @@ Efficient reassembly of the file from its big chunks is crucial. Two merging str
   - Chunks can be merged in any order as long as they are consecutive.
 
 ### Lazy Merging
+
 - **Deferred Merging:**  
   - All big chunks are first fully received and stored.
 - **Post-Transfer Combination:**  
@@ -104,5 +113,7 @@ The multi-stream approach outlined in this documentation significantly improves 
 
 ## References
 
-- [Manager API Documentation](https://github.com/ShaikAli65/PeerConnect/blob/dev/docs/managers/README.md)
-- [Connector API Documentation](https://github.com/ShaikAli65/PeerConnect/blob/dev/docs/core/connector.md)
+- [Manager API Documentation](/docs/managers/README.md)
+- [Connector API Documentation](/docs/core/connector.md)
+
+[back](/docs/transfer)

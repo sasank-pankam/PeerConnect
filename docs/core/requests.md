@@ -7,17 +7,19 @@ The `requests.py` module forms the core network request handling system for Peer
 - Network endpoint initialization
 - UDP multicast/broadcast communication
 - Request dispatching
-- Integration with Kademlia DHT ([more](https://github.com/ShaikAli65/PeerConnect/blob/dev/docs/core/kademlia.md)) and gossip protocols [more](https://github.com/ShaikAli65/PeerConnect/blob/dev/docs/core/gossip.md).
-- Discovery protocol implementation [more](https://github.com/ShaikAli65/PeerConnect/blob/dev/docs/discovery.md).
+- Integration with Kademlia DHT ([more](/docs/core/kademlia.md)) and gossip protocols [more](/docs/core/gossip.md).
+- Discovery protocol implementation [more](/docs/discovery.md).
 
 ## Key Components
 
 ### 1. Core Classes
 
 #### `RequestsDispatcher`
+
 ```python
 class RequestsDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher)
 ```
+
 - **Responsibilities**:
   - Queue-based request processing
   - Handler registry management
@@ -28,9 +30,11 @@ class RequestsDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher)
   - Automatic exception handling
 
 #### `RequestsEndPoint`
+
 ```python
 class RequestsEndPoint(asyncio.DatagramProtocol)
 ```
+
 - **Protocol Handler**:
   - UDP datagram reception
   - Packet validation
@@ -43,7 +47,9 @@ class RequestsEndPoint(asyncio.DatagramProtocol)
 ### 2. Initialization Process
 
 #### `initiate()`
+
 Main initialization sequence:
+
 ```python
 async def initiate():
     # Network setup
@@ -66,6 +72,7 @@ async def initiate():
 ### 3. Network Configuration
 
 #### Socket Setup
+
 ```python
 async def _create_listen_socket(bind_address, multicast_addr):
     # Creates configured UDP socket with:
@@ -75,6 +82,7 @@ async def _create_listen_socket(bind_address, multicast_addr):
 ```
 
 #### Endpoint Creation
+
 ```python
 async def setup_endpoint(bind_address, multicast_address, req_dispatcher):
     # Creates datagram endpoint with:
@@ -86,6 +94,7 @@ async def setup_endpoint(bind_address, multicast_address, req_dispatcher):
 ## Protocol Handling
 
 ### Packet Processing Flow
+
 ```mermaid
 sequenceDiagram
     participant Network
@@ -119,6 +128,7 @@ sequenceDiagram
 ## Usage Patterns
 
 ### Sending Requests
+
 ```python
 # Create request event
 event = RequestEvent(
@@ -132,6 +142,7 @@ await Dock.dispatchers[DISPATCHS.REQUESTS].submit(event)
 ```
 
 ### Receiving Requests
+
 ```python
 class CustomHandler:
     def __init__(self):
@@ -195,6 +206,7 @@ class CustomHandler:
    - BSD variants require socket option adjustments
 
 2. **Discovery Protocol**:
+
    ```python
    discovery_state = State(
        "discovery",
@@ -208,16 +220,21 @@ class CustomHandler:
        is_blocking=True,
    )
    ```
+
    - Uses multicast for initial peer discovery
    - Falls back to broadcast in LAN environments (TBD).
    - Integrates with Kademlia for peer persistence
 
 3. **Shutdown Sequence**:
+
    ```python
    async def end_requests():
        Dock.kademlia_network_server.stop()
        Dock.requests_endpoint.close()
    ```
+
    - Graceful transport termination
    - Resource cleanup
    - State preservation (WIP)
+
+> [back](/docs/core)

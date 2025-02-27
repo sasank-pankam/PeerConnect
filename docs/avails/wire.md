@@ -12,9 +12,11 @@ The `wire.py` module provides core networking primitives for structured data tra
 ## Key Components
 
 ### 1. Wire Class
+
 Core I/O operations for network communication
 
 **Methods**:
+
 ```python
 # Stream communication
 Wire.send(sock: Socket, data: bytes)
@@ -29,14 +31,17 @@ Wire.load_datagram(data_payload)
 ```
 
 **Features**:
+
 - Automatic size framing (4-byte header)
 - Async/sync variants
 - Maximum datagram size enforcement (64KB)
 
 ### 2. WireData Class
+
 Structured message container for network operations
 
 **Structure**:
+
 ```python
 WireData(
     header: str,        # Message type identifier
@@ -48,6 +53,7 @@ WireData(
 ```
 
 **Serialization**:
+
 ```python
 bytes_data = bytes(wire_data_instance)
 restored = WireData.load_from(bytes_data)
@@ -56,6 +62,7 @@ restored = WireData.load_from(bytes_data)
 ### 3. Protocol Messages
 
 #### Gossip Protocol
+
 ```python
 class GossipMessage:
     message: str    # Content payload
@@ -64,6 +71,7 @@ class GossipMessage:
 ```
 
 #### Palm Tree Protocol
+
 ```python
 @dataclass
 class PalmTreeInformResponse:
@@ -84,9 +92,11 @@ class PalmTreeSession:
 ```
 
 ### 4. DataWeaver Class
+
 Web handler message wrapper
 
 **Structure**:
+
 ```json
 {
     "header": "MESSAGE_TYPE",
@@ -100,6 +110,7 @@ Web handler message wrapper
 ## Usage Examples
 
 ### Sending a Structured Message
+
 ```python
 # Create message
 data = WireData(
@@ -119,6 +130,7 @@ transport.sendto(bytes(data), address)
 ```
 
 ### Receiving Messages
+
 ```python
 # Stream receiver
 def handle_stream(sock):
@@ -149,16 +161,21 @@ def datagram_received(data, addr):
 ## Protocol Details
 
 ### Versioning
+
 ```python
 WIRE_VERSION = "0.1" # ? TBD # Defined in constants
 ```
 
 ### Error Handling
+
 - `InvalidPacket` exception for malformed data
 - Automatic connection health checks
 - Size validation for datagrams
 
 ### Performance Characteristics
+
 - Zero-copy buffer management
 - Async-ready architecture
 - Batch message processing
+
+[back](/docs/avails)
