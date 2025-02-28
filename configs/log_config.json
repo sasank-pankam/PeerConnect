@@ -59,7 +59,8 @@
   "loggers": {
     "": {
       "handlers": [
-        "queue_handler"
+        "queue_handler",
+        "console"
       ],
       "level": "DEBUG"
     },

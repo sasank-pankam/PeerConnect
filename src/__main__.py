@@ -28,7 +28,7 @@ def initial_states():
         profilemanager.load_profiles_to_program,
         lazy_args=(lambda: Dock.current_config,)
     )
-    # launch_webpage = State("launching webpage", bootup.launch_web_page)
+    launch_webpage = State("launching webpage", bootup.launch_web_page)
 
     page_handle = State("initiating page handle", pagehandle.initiate_page_handle, lazy_args=(lambda: Dock.exit_stack,))
 
