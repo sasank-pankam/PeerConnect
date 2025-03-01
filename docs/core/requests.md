@@ -222,7 +222,7 @@ class CustomHandler:
    ```
 
    - Uses multicast for initial peer discovery
-   - Falls back to broadcast in LAN environments (TBD).
+   - Falls back to broadcast in LAN environments ([TBD](/docs/README.md#legend)).
    - Integrates with Kademlia for peer persistence
 
 3. **Shutdown Sequence**:

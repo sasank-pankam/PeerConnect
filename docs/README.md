@@ -26,3 +26,4 @@ PeerConnect follows an IPC-style design for seamless integration with the User I
 |   WIP    | work in progress     |
 |   RIP    | refactor in progress |
 |   DEP    | deprecated           |
+|   TBD    | To Be Decided        |
