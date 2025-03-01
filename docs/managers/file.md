@@ -109,7 +109,7 @@ Yields the established connection for use in file transfers.
 
 ---
 
-### OTM (On-Demand Transfer) Support
+### OTM (One To Many Transfer) Support
 
 #### `OTMConnectionHandler()`
 
@@ -163,7 +163,7 @@ The File Manager module provides a robust mechanism for handling file transfers 
 - **File Receiving:**  
   Wrapping incoming connections into a receiver that processes and stores incoming file data.
 - **OTM Support:**  
-  Handling on-demand file transfer sessions with dedicated OTM handlers.
+  Handling one to many file transfer sessions with dedicated OTM handlers.
 - **User Interaction:**  
   Allowing file selection through a non-blocking file dialog.
 
