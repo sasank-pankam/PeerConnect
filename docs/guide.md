@@ -46,7 +46,22 @@ def awesome_function(arg1, arg2: type, **kwargs):...
 - function documentation
 - optional status of function [WIP,RIP,...](/docs/README.md#legend)
 
+Consider this when writing docs:
+
+```txt
+The class docstring should not repeat unnecessary information, such as that the class is a class.
+```
+
+This applies to `function` or `module` or `package`
+[reference](<https://google.github.io/styleguide/pyguide.html#:~:text=All%20class%20docstrings,is%20a%20class.>)
+
 ## Footer
 
 - Should contain a break line
 - a link naming `back` pointing outward into documentation heirarchy
+
+```md
+---
+
+[back](/docs)
+```
