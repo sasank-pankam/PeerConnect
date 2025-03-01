@@ -1,6 +1,6 @@
 # Directory Transfer Module
 
-This module provides functionality for transferring entire directories between peers. It exports several key components that help manage directory transfers within PeerConnect. In particular, it makes available:
+Provides functionality for transferring entire directories between peers. It exports several key components that help manage directory transfers within PeerConnect. In particular, it makes available:
 
 - **DirSender** – (Sender counterpart for directories)  
   *Handles packaging and sending a directory’s contents and structure to a remote peer.*

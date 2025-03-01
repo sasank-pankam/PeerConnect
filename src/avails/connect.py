@@ -27,7 +27,7 @@ class Socket(_socket.socket):
 
     Attributes:
         __loop (asyncio.AbstractEventLoop): The event loop used for asynchronous operations.
-         This must be set using the set_loop method before any asynchronous methods are called.
+        This must be set using the set_loop method before any asynchronous methods are called.
     """
 
     __loop: Optional[_asyncio.AbstractEventLoop] = None

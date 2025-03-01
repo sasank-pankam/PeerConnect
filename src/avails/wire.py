@@ -1,6 +1,6 @@
 """Every Wire Format of Peerconnect
 
-This module contains all the classes related to how data appears in wire transfer on top of ip protocols.
+Contains all the classes related to how data appears in wire transfer on top of ip protocols.
 
 All classes provide serializing and de-serializing methods to make them ready to transfer over wire.
 

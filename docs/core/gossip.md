@@ -252,6 +252,6 @@ def initiate_gossip(data_transport, req_dispatcher):
 
 ## Conclusion
 
-The `core/gossip` module provides a comprehensive, modular implementation of a gossip protocol in PeerConnect. Its design leverages global state management (via `Dock`), specialized message lists for rumor mongering, and asynchronous event dispatching to ensure efficient and scalable message propagation. Developers can extend or modify this module to fine-tune the gossip behavior, adjust probabilistic parameters, or integrate additional event types as needed.
+The `core/gossip` module provides a comprehensive, modular implementation of a gossip protocol in PeerConnect. Its design leverages global state management (via `Dock`), specialized message lists for rumor mongering, and asynchronous event dispatching to ensure efficient and scalable message propagation. Developers can extend or modify to fine-tune the gossip behavior, adjust probabilistic parameters, or integrate additional event types as needed.
 
 > [back](/docs/core)

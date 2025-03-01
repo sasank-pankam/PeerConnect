@@ -1,13 +1,13 @@
 # Deprecated: Server Connection and User List Management Module
 
 **Note:**  
-This module is deprecated and may be removed in future releases. It handles initial connection setup with the server and the retrieval of a list of remote users. Newer implementations should be used for server connectivity and user discovery.
+Module is deprecated and may be removed in future releases. It handles initial connection setup with the server and the retrieval of a list of remote users. Newer implementations should be used for server connectivity and user discovery.
 
 ---
 
 ## Overview
 
-This module implements the following functionalities:
+Implements the following functionalities:
 
 - **Establishing Connection:**  
   Connects to a designated server using TCP and verifies connection status using predefined headers.
@@ -45,7 +45,7 @@ This module implements the following functionalities:
 - **Purpose:**  
   Reads the total number of users (as a 64-bit unsigned integer) from the socket, then calls `get_initial_list` to retrieve the list.
 - **Usage:**  
-  This function encapsulates the logic for retrieving the user list from an already established connection.
+  Encapsulates the logic for retrieving the user list from an already established connection.
 
 ---
 
@@ -58,7 +58,7 @@ This module implements the following functionalities:
   - Connects to the peer and sends a request for the list.
   - Attempts to retrieve the list again after encountering an error.
 - **Note:**  
-  This function demonstrates a basic error recovery strategy for list retrieval.
+  Demonstrates a basic error recovery strategy for list retrieval.
 
 ---
 
@@ -112,7 +112,7 @@ This module implements the following functionalities:
 
 ## Summary
 
-This deprecated module was responsible for managing the initial connection to the server and retrieving a list of remote peers. It provided mechanisms for:
+Was (deprecated) responsible for managing the initial connection to the server and retrieving a list of remote peers. It provided mechanisms for:
 
 - Establishing both direct and redirected server connections.
 - Handling user list retrieval and error recovery.

@@ -235,6 +235,6 @@ class CustomHandler:
 
    - Graceful transport termination
    - Resource cleanup
-   - State preservation (WIP)
+   - State preservation ([WIP](/docs/README.md#legend))
 
 > [back](/docs/core)

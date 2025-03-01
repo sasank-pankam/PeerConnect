@@ -399,7 +399,7 @@ class NotInUse:
     def __init__(self, function):
         """Decorator class to mark functions as not in use or not fully tested.
 
-        This class is used to mark functions that are not currently in use or haven't been fully tested.
+        Used to mark functions that are not currently in use or haven't been fully tested.
         By marking a function with this class, it prevents the call to the function unless explicitly allowed by the user.
 
         Args:

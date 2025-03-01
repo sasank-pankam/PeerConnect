@@ -7,7 +7,7 @@ class RemotePeer:
     """Used to represent a peer details in network
 
     There are some attributes that are kept to keep this class compatible with kademlia package
-    This Follows a structure that is required by kademila package's Node
+    Follows a structure that is required by kademila package's Node
     and added extra things used by code
 
     Note:

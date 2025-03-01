@@ -18,7 +18,7 @@ connections and connection pooling.
 
 ### Overview
 
-- This module is *closely coupled* with `core.acceptor` and provides functionality for connecting to remote peers.
+- *Closely coupled* with `core.acceptor` and provides functionality for connecting to remote peers.
 - It encapsulates both the logic for creating outbound connections and the management of connection pools (active and
   passive connections).
 

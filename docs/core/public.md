@@ -122,6 +122,6 @@ local_peer = get_this_remote_peer()
 ⚠️ **Tradeoff** - Balances practicality of state sharing against ideal isolation for distributed system needs  
 ⚠️ **Caution** - Requires strict discipline to maintain read-only access except through owner modules  
 
-**WIP**:  A refactor needs to be considered on applying context pattern which passes Dock as a context object around application
+**[WIP](/docs/README.md#legend)**:  A refactor needs to be considered on applying context pattern which passes Dock as a context object around application
 
 > [back](/docs/core)

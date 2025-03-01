@@ -14,7 +14,7 @@ connection pooling.
   - [Acceptor](#acceptor)
   - [Pooling](#pooling)
 
-- This module is *closely coupled* with `core.connector` and handles the acceptance of incoming peer connections.
+- *closely coupled* with `core.connector` and handles the acceptance of incoming peer connections.
 - It employs lazy loading (via the `initiate_acceptor` function) to avoid circular imports between the acceptor and
   connector.
 

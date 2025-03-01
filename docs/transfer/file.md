@@ -1,6 +1,6 @@
 # File Sender Module
 
-This module implements the logic for sending files from one peer to another. It defines the `Sender` class, which is responsible for reading file data from disk, dividing files into chunks, and transmitting these chunks over the network using an asynchronous workflow.
+Implements the logic for sending files from one peer to another. It defines the `Sender` class, which is responsible for reading file data from disk, dividing files into chunks, and transmitting these chunks over the network using an asynchronous workflow.
 
 ### Overview
 
@@ -41,7 +41,7 @@ The `Sender` module integrates closely with other components in the PeerConnect 
 
 ## File Receiver Module
 
-This module is responsible for receiving file data sent by a remote peer. It defines the `Receiver` class, which coordinates the reception of file chunks, writes these chunks to disk, and manages transfer state and metadata. A specialized subclass, `DirReceiver`, is also defined to handle [directory](/docs/managers/directory.md) transfers.
+Responsible for receiving file data sent by a remote peer. It defines the `Receiver` class, which coordinates the reception of file chunks, writes these chunks to disk, and manages transfer state and metadata. A specialized subclass, `DirReceiver`, is also defined to handle [directory](/docs/managers/directory.md) transfers.
 
 ### Overview
 

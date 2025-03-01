@@ -1,6 +1,6 @@
 # Module: avails.connect
 
-The `avails.connect` module serves as the public interface for network connection functionality in PeerConnect. It aggregates three lower-level modules—`_asocket`, `_conn`, and `_netproto`—and provides high-level utilities for creating, managing, and inspecting socket connections. This module supports both synchronous and asynchronous operations, as well as specialized helpers for multicast configurations.
+Serves as the public interface for network connection functionality in PeerConnect. It aggregates three lower-level modules—`_asocket`, `_conn`, and `_netproto` and provides high-level utilities for creating, managing, and inspecting socket connections. Supports both synchronous and asynchronous operations, as well as specialized helpers for multicast configurations.
 
 ---
 
@@ -8,10 +8,10 @@ The `avails.connect` module serves as the public interface for network connectio
 
 The module is organized into the following subcomponents:
 
-- **Module `_asocket`**  
-  Provides the custom `Socket` class, a subclass of Python’s built-in socket. This class integrates with asyncio for asynchronous I/O while retaining synchronous methods.
+- **Module `_asocket`**  [src](/src/avails/_asocket.py)
+  Provides the custom `Socket` class, a subclass of Python’s built-in socket. Integrates with asyncio for asynchronous I/O while retaining synchronous methods.
 
-- **Module `_conn`**  
+- **Module `_conn`**  [src](/src/avails/_conn.py)
   Contains mixins and helper classes to extend socket functionality with throughput measurement and flow control:
   - **_PauseMixIn / _ResumeMixIn:**  
     Provide methods to pause and resume data flow.
@@ -24,7 +24,7 @@ The module is organized into the following subcomponents:
   - **MsgConnection / MsgConnectionNoRecv:**  
     Handle sending and receiving of marshalled wire data, with the latter disabling receive operations.
 
-- **Module `_netproto`**  
+- **Module `_netproto`**  [src](/src/avails/_netproto_.py)
   Defines an abstract network protocol interface and concrete implementations for TCP and UDP:
   - **NetworkProtocol (abstract):**  
     Specifies methods to create asynchronous/synchronous sockets and server sockets.
@@ -33,7 +33,7 @@ The module is organized into the following subcomponents:
   - **UDPProtocol:**  
     Implements the interface for UDP connections.
 
-- **High-Level Module Functions (connect):**  
+- **High-Level Module Functions (connect):**  [src](/src/avails/connect.py)
   Offers a set of utilities for establishing and managing connections:
   - **IPAddress (NamedTuple):**  
     Represents an IP address.

@@ -65,7 +65,7 @@ To prevent such race conditions:
 - **Incoming connections** are kept **separate** from outgoing connections.
 - They are pooled **independently**, ensuring that the acceptor’s watcher can monitor the connection without interference from the connector.
   
-This separation guarantees that when a service (**s**) on **p1** requests a connection, it only receives an outgoing connection from the connector's pool, which is not subject to the acceptor's monitoring.
+Separation guarantees that when a service (**s**) on **p1** requests a connection, it only receives an outgoing connection from the connector's pool, which is not subject to the acceptor's monitoring.
 
 ---
 
@@ -100,7 +100,7 @@ This separation guarantees that when a service (**s**) on **p1** requests a conn
 ### `start_watcher` Function
 
 - **Description:**  
-  An asynchronous function that instantiates the `Watcher` (via the global exit stack in `Dock`) and begins monitoring connections. This function ensures that the `Watcher` is active within the application's lifecycle.
+  An asynchronous function that instantiates the `Watcher` (via the global exit stack in `Dock`) and begins monitoring connections. Ensures that the `Watcher` is active within the application's lifecycle.
 
 ---
 

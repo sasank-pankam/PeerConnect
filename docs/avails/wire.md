@@ -107,6 +107,8 @@ Web handler message wrapper
 }
 ```
 
+see [here](#dataweaver) for more
+
 ## Usage Examples
 
 ### Sending a Structured Message
@@ -150,13 +152,26 @@ def datagram_received(data, addr):
 
 ## Serialization Formats
 
-1. **WireData**:
-   - Uses MessagePack (umsgpack)
-   - Structure: `[header, msg_id, version, body, peer_id]`
+### 1. WireData
 
-2. **DataWeaver**:
-   - Uses JSON
-   - Schema enforced with required fields check
+- Uses MessagePack (umsgpack)
+- Structure: `[header, msg_id, version, body, peer_id]`
+
+### DataWeaver
+
+- Uses JSON
+- Schema enforced with required fields check
+- Structure:
+  - `header`: header related to operation (format f"{type_code}{header}") {see type below}
+  - `content`: most of times it is a json containing data (nullable)
+  - `peer_id`: peer id that this message belongs to (nullable)
+  - `msg_id`: message id (nullable)
+  - `_type`: type of message (SIGNAL(0) and DATA(1))
+
+---
+
+- This class scope is limited to conduit package [more](/docs/conduit)
+- Provides schema wrapping for interacting with UI java script
 
 ## Protocol Details
 

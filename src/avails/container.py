@@ -10,7 +10,7 @@ import src.avails.connect as connect
 from src.avails.bases import HasID, HasIdProperty, HasPeerId
 
 """
-This module contains simple storages used across the peer connect
+Contains simple storages used across the peer connect
 1. 
 2. PeerDict
 3. SafeSet

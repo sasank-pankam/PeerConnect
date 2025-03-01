@@ -1,6 +1,6 @@
 # Connectivity Check Module Documentation
 
-This module implements connectivity checking for remote peers. It verifies whether a peer is reachable using a two-step process: first via a UDP-based "ping" (using the requests endpoint) and then-if necessary-by attempting a TCP connection. The module is designed to track and manage these connectivity checks using a singleton class, ensuring that recent checks are reused and that pending checks are properly canceled during shutdown.
+Connectivity checking for remote peers. It verifies whether a peer is reachable using a two-step process: first via a UDP-based "ping" (using the requests endpoint) and then-if necessary-by attempting a TCP connection. The module is designed to track and manage these connectivity checks using a singleton class, ensuring that recent checks are reused and that pending checks are properly canceled during shutdown.
 
 ---
 
@@ -75,7 +75,7 @@ Defines the following states for a connectivity check:
   - **`@staticmethod async def _new_check(request)`**  
     Performs the actual connectivity check:
     - Sends a UDP ping via `send_msg_to_requests_endpoint` and waits for a reply with a timeout.
-    - On timeout, attempts a TCP connection using `connect.connect_to_peer` and sends a simple packet. [[RIP](#refactor), that integrates *Connector*]
+    - On timeout, attempts a TCP connection using `connect.connect_to_peer` and sends a simple packet. [[RIP](/docs/README.md#legend), that integrates *Connector*]
     - Returns `True` if the check succeeds; otherwise, returns `False`.
 
 ---
@@ -99,7 +99,5 @@ Defines the following states for a connectivity check:
 ## Summary
 
 The Connectivity Check Module provides a robust mechanism to determine the reachability of remote peers. By combining both UDP-based pings and fallback TCP checks, it accommodates various network conditions. The module also efficiently manages check requests—preventing redundant checks through caching recent results and ensuring proper cleanup of pending tasks.
-
-<a id="refactor"> RIP: Refactor In Progress </a>
 
 > [back](/docs/core)

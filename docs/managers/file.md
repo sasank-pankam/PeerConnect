@@ -166,3 +166,5 @@ The File Manager module provides a robust mechanism for handling file transfers 
   Handling on-demand file transfer sessions with dedicated OTM handlers.
 - **User Interaction:**  
   Allowing file selection through a non-blocking file dialog.
+
+[back](/docs/managers)

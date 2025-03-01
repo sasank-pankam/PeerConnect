@@ -48,7 +48,7 @@ class OTMFilesRelay(PalmTreeRelay):
 
     async def _recv_file_metadata(self):
         self._read_link = await self._parent_link_fut
-        # this future is set when a sender makes a connection
+        # set when a sender makes a connection
 
         files_metadata = await self._read_link.recv(self.session.chunk_size)
 
@@ -57,7 +57,7 @@ class OTMFilesRelay(PalmTreeRelay):
         await self.send_file_metadata(files_metadata)
 
     async def send_file_metadata(self, data):
-        # this is the first step of a file transfer
+        # first step of a file transfer
         await self._forward_chunk(data)
 
     async def _forward_chunk(self, chunk: bytes):

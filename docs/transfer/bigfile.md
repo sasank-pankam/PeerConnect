@@ -1,6 +1,6 @@
 # Big File Transfer Protocol Documentation
 
-This document provides a comprehensive overview of the protocol used for transferring large files (over 2GB) by leveraging multiple network streams to optimize bandwidth utilization.
+Provides a comprehensive overview of the protocol used for transferring large files (over 2GB) by leveraging multiple network streams to optimize bandwidth utilization.
 
 ## Table of Contents
 
