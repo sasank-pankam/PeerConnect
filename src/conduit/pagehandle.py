@@ -187,7 +187,7 @@ async def handle_client(web_socket: WebSocketServerProtocol):
             await validate_connection(web_socket)
         except ConnectionError:
             return
-
+        front_end_data_disp = MessageFromFrontEndDispatcher()
         async for data in web_socket:
             logger.info(f"[PAGE HANDLE] data from page: {data=}")
             parsed_data = DataWeaver(serial_data=data)
@@ -198,7 +198,7 @@ async def handle_client(web_socket: WebSocketServerProtocol):
                 logger.debug("[PAGE HANDLE]", exc_info=ip)
                 continue
 
-            MessageFromFrontEndDispatcher()(parsed_data)
+            front_end_data_disp(parsed_data)
 
     except websockets.exceptions.ConnectionClosed:
         logger.info("[PAGE HANDLE] Websocket Connection closed")

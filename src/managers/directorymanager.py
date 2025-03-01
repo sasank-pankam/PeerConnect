@@ -9,7 +9,7 @@ from src.avails.events import ConnectionEvent
 from src.avails.exceptions import TransferRejected
 from src.conduit import webpage
 from src.core.connector import Connector
-from src.core.public import Dock, get_this_remote_peer
+from src.core.public import get_this_remote_peer
 from src.transfers import HEADERS
 from src.transfers.files import DirReceiver, DirSender, rename_directory_with_increment
 from src.transfers.status import StatusMixIn
@@ -87,12 +87,12 @@ def pause_transfer(peer_id, transfer_id):
     transfers_book.add_to_continued(peer_id, transfer_handle)
 
 
-def DirConnectionHandler():
+def DirConnectionHandler(app_ctx):
     async def handler(event: ConnectionEvent):
         connection = event.connection
 
         transfer_id = event.handshake.body['transfer_id']
-        peer = Dock.peer_list.get_peer(event.handshake.peer_id)
+        peer = app_ctx.peer_list.get_peer(event.handshake.peer_id)
         transfer_id = peer.peer_id + transfer_id
 
         dir_name = event.handshake.body['dir_name']

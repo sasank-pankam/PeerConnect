@@ -5,7 +5,7 @@ from src.avails import BaseDispatcher, DataWeaver, WireData, const
 from src.conduit import logger
 from src.conduit.headers import HANDLE
 from src.core import peers
-from src.core.public import Dock, get_this_remote_peer
+from src.core.public import get_this_remote_peer
 from src.managers import directorymanager, filemanager, message
 from src.transfers import HEADERS
 
@@ -88,7 +88,7 @@ async def send_files_to_multiple_peers(command_data: DataWeaver):
     if not selected_files:
         return
     peer_ids = command_data.content["peerList"]
-    peer_objects = [Dock.peer_list.get_peer(peer_id) for peer_id in peer_ids]
+    peer_objects = [(await peers.get_remote_peer_at_every_cost(peer_id)) for peer_id in peer_ids]
     selected_files = [Path(x) for x in selected_files]
     file_sender = filemanager.start_new_otm_file_transfer(selected_files, peer_objects)
 

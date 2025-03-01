@@ -12,7 +12,7 @@ from src.avails.exceptions import TransferIncomplete, TransferRejected
 from src.conduit import webpage
 from src.core import peers
 from src.core.connector import Connector
-from src.core.public import Dock, get_this_remote_peer
+from src.core.public import get_this_remote_peer
 from src.transfers import HEADERS, TransferState, files, otm
 from src.transfers.status import StatusMixIn
 
@@ -38,8 +38,9 @@ async def send_files_to_peer(peer_id, selected_files):
         # if any transfer is running just attach FileItems to that transfer
         file_sender_handle.attach_files(selected_files)
         return
-
-    file_sender, status_updater = await _send_setup(peer_id, selected_files)
+    
+    peer = await peers.get_remote_peer_at_every_cost(peer_id)
+    file_sender, status_updater = await _send_setup(peer, selected_files)
     yield_decision = status_updater.should_yield
 
     try:
@@ -59,15 +60,15 @@ async def send_files_to_peer(peer_id, selected_files):
         status_updater.close()
 
 
-async def _send_setup(peer_id, selected_files):
+async def _send_setup(peer, selected_files):
     status_updater = StatusMixIn(const.TRANSFER_STATUS_UPDATE_FREQ)
     file_sender = files.Sender(
-        Dock.peer_list.get_peer(peer_id),
+        peer,
         transfers_book.get_new_id(),
         selected_files,
         status_updater,
     )
-    transfers_book.add_to_current(peer_id=peer_id, transfer_handle=file_sender)
+    transfers_book.add_to_current(peer_id=peer.peer_id, transfer_handle=file_sender)
     return file_sender, status_updater
 
 

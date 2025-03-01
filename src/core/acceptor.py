@@ -19,7 +19,7 @@ from src.avails.connect import Connection
 from src.avails.events import ConnectionEvent
 from src.avails.mixins import AExitStackMixIn, QueueMixIn, singleton_mixin
 from src.core import bandwidth, peers
-from src.core.public import DISPATCHS, Dock, addr_tuple, connections_dispatcher
+from src.core.public import DISPATCHS, addr_tuple, connections_dispatcher
 from src.managers.directorymanager import DirConnectionHandler
 from src.managers.filemanager import FileConnectionHandler, OTMConnectionHandler
 from src.transfers import HEADERS
@@ -27,23 +27,22 @@ from src.transfers import HEADERS
 _logger = logging.getLogger(__name__)
 
 
-async def initiate_acceptor(exit_stack, dispatchers):
+async def initiate_acceptor(app_ctx):
     connection_dispatcher = ConnectionDispatcher()
-
     # data_dispatcher.register_handler(HEADERS.CMD_CLOSING_HEADER, ConnectionCloseHandler())
 
     c_reg_handler = connection_dispatcher.register_handler
     c_reg_handler(HEADERS.CMD_FILE_CONN, FileConnectionHandler())
-    c_reg_handler(HEADERS.CMD_RECV_DIR, DirConnectionHandler())
+    c_reg_handler(HEADERS.CMD_RECV_DIR, DirConnectionHandler(app_ctx=app_ctx))
     c_reg_handler(HEADERS.OTM_UPDATE_STREAM_LINK, OTMConnectionHandler())
 
-    dispatchers[DISPATCHS.CONNECTIONS] = connection_dispatcher
+    app_ctx.dispatchers[DISPATCHS.CONNECTIONS] = connection_dispatcher
 
-    acceptor = Acceptor(finalizer=Dock.finalizing.is_set)
+    acceptor = Acceptor(finalizer=app_ctx.finalizing.is_set)
 
     # warning, careful with order
-    await exit_stack.enter_async_context(connection_dispatcher)
-    await exit_stack.enter_async_context(acceptor)
+    await app_ctx.exit_stack.enter_async_context(connection_dispatcher)
+    await app_ctx.exit_stack.enter_async_context(acceptor)
 
 
 class ConnectionDispatcher(QueueMixIn, BaseDispatcher):

@@ -30,7 +30,6 @@ async def initiate(exit_stack, dispatchers, finalizing):
     connections_dispatcher().register_handler(HEADERS.PING, PingHandler())
     await exit_stack.enter_async_context(data_dispatcher)
     await exit_stack.enter_async_context(_locks_stack)
-    return data_dispatcher
 
 
 class MsgDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):

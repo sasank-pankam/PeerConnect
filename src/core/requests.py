@@ -18,11 +18,15 @@ from src.transfers.transports import RequestsTransport
 _logger = logging.getLogger(__name__)
 
 
-async def initiate(exit_stack, dispatchers, state_manager):
+async def initiate(app: Dock):
     # a discovery request packet is observed in wire shark but that packet is
     # not getting delivered to application socket in linux when we bind to specific interface address
 
     # TL;DR: causing some unknown behaviour in linux system
+
+    exit_stack = app.exit_stack
+    dispatchers = app.dispatchers
+    state_manager = app.state_manager_handle
 
     if const.IS_WINDOWS:
         const.BIND_IP = const.THIS_IP.ip
@@ -37,27 +41,26 @@ async def initiate(exit_stack, dispatchers, state_manager):
     transport = await setup_endpoint(bind_address, multicast_address, req_dispatcher)
     req_dispatcher.transport = RequestsTransport(transport)
 
-    kad_server = _kademlia.prepare_kad_server(transport)
+    kad_server = _kademlia.prepare_kad_server(transport, app=app)
     _kademlia.register_into_dispatcher(kad_server, req_dispatcher)
 
     # await gossip_initiate(req_dispatcher, transport)
-    gossip_dispatcher = gossip.initiate_gossip(transport, req_dispatcher)
+    gossip_dispatcher = gossip.initiate_gossip(transport, req_dispatcher, app)
     await exit_stack.enter_async_context(gossip_dispatcher)
 
     dispatchers[DISPATCHS.REQUESTS] = req_dispatcher
     dispatchers[DISPATCHS.GOSSIP] = gossip_dispatcher
-    Dock.requests_transport = req_dispatcher.transport
-    Dock.kademlia_network_server = kad_server
+    app.requests_transport = req_dispatcher.transport
+    app.kademlia_network_server = kad_server
 
     discovery_state = State(
         "discovery",
-        functools.partial(
-            discovery_initiate,
-            kad_server,
-            multicast_address,
-            req_dispatcher,
-            transport
-        ),
+        discovery_initiate,
+        kad_server,
+        multicast_address,
+        transport,
+        req_dispatcher,
+        app,
         is_blocking=True,
     )
 
@@ -71,7 +74,7 @@ async def initiate(exit_stack, dispatchers, state_manager):
     await state_manager.put_state(add_to_lists)
     # TODO: introduce context manager support into state-manager.State itself which reduces boilerplate
 
-    Dock.exit_stack.push_async_exit(kad_server)
+    app.exit_stack.push_async_exit(kad_server)
 
     # await kad_server.add_this_peer_to_lists()
 
@@ -167,6 +170,6 @@ class RequestsEndPoint(asyncio.DatagramProtocol):
         self.dispatcher(event)
 
 
-async def end_requests():
-    Dock.kademlia_network_server.stop()
-    Dock.requests_transport.close()
+async def end_requests(app):
+    app.kademlia_network_server.stop()
+    app.requests_transport.close()

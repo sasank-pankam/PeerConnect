@@ -13,7 +13,6 @@ from kademlia.utils import digest
 import src.avails.constants as const
 from src.avails import connect
 from src.configurations import logger as _logger
-from src.core.public import Dock
 
 
 def print_constants():
@@ -41,10 +40,13 @@ def print_constants():
 def set_paths():
     const.PATH_CURRENT = Path(os.getcwd())
     const.PATH_LOG = Path(const.PATH_CURRENT, 'logs')
+    const.PATH_LOG.mkdir(exist_ok=True)
     const.PATH_PAGE = Path(const.PATH_CURRENT, 'webpage')
     config_path = Path(const.PATH_CURRENT, 'configs')
+    config_path.mkdir(exist_ok=True)
     const.PATH_CONFIG_FILE = Path(config_path, const.DEFAULT_CONFIG_FILE_NAME)
     const.PATH_PROFILES = Path(config_path, 'profiles')
+    const.PATH_PROFILES.mkdir(exist_ok=True)
     const.PATH_LOG_CONFIG = Path(config_path, const.LOG_CONFIG_NAME)
     const.PATH_CONFIG = config_path
 
@@ -61,18 +63,23 @@ def set_paths():
         const.PATH_DOWNLOAD = os.path.join(const.PATH_CURRENT, 'downloads')
 
 
-async def load_configs():
+async def load_configs(app):
     config_map = configparser.ConfigParser(allow_no_value=True)
 
     def _helper():
         try:
             config_map.read(const.PATH_CONFIG_FILE)
+            # access required keys
+            config_map['USER_PROFILES']
+            config_map['NERD_OPTIONS']
+            config_map['VERSIONS']
+            config_map['SELECTED_PROFILE']
         except KeyError:
-            write_default_configurations(const.PATH_CONFIG_FILE)
+            _write_default_configurations(const.PATH_CONFIG_FILE)
             config_map.read(const.PATH_CONFIG_FILE)
 
-        if not Path(const.PATH_PROFILES, const.DEFAULT_PROFILE_NAME).exists():
-            write_default_profile()
+        if not (profile_path := Path(const.PATH_PROFILES, const.DEFAULT_PROFILE_NAME)).exists():
+            _write_default_profile(profile_path, config_map)
 
         if const.DEFAULT_PROFILE_NAME not in config_map['USER_PROFILES']:
             config_map.set('USER_PROFILES', const.DEFAULT_PROFILE_NAME)
@@ -98,46 +105,50 @@ async def load_configs():
         return await asyncio.to_thread(_finalize_config_helper)
 
     await asyncio.to_thread(_helper)
-    Dock.current_config = config_map
-    Dock.exit_stack.push_async_callback(finalize_config)
+    app.current_config = config_map
+    app.exit_stack.push_async_callback(finalize_config)
     set_constants(config_map)
 
 
-def write_default_configurations(path):
+def _write_default_configurations(path):
     default_config_file = (
-        '[NERD_OPTIONS]\n'
-        'this_port = 48221\n'
-        'page_port = 12260\n'
-        'ip_version = 4\n'
-        'protocol = tcp\n'
-        'req_port = 35623\n'
-        'page_serve_port = 40000\n'
-        '\n'
-        '[USER_PROFILES]\n'
-        'admin\n'
-        '[SELECTED_PROFILE]\n'
-        'default_profile.ini\n'
+        "[NERD_OPTIONS]\n"
+        f"ip_version = {4 if const.IP_VERSION == socket.AF_INET else 6}\n"
+        "protocol = tcp\n"
+        f"this_port = {const.PORT_THIS}\n"
+        f"req_port = {const.PORT_REQ}\n"
+        f"page_port = {const.PORT_PAGE}\n"
+        f"page_serve_port = {const.PORT_PAGE_SERVE}\n"
+        "\n"
+        "[VERSIONS]\n"
+        "global = 1.1\n"
+        "rp = 1.1\n"
+        "fo = 1.1\n"
+        "do = 1.1\n"
+        "wire = 1.1\n"
+        "\n"
+        "[USER_PROFILES]\n"
+        f"{const.DEFAULT_PROFILE_NAME}\n"
+        "\n"
+        "[SELECTED_PROFILE]\n"
+        f"{const.DEFAULT_PROFILE_NAME}\n"
     )
     with open(path, 'w+') as config_file:
         config_file.write(default_config_file)
 
 
-def write_default_profile():
+def _write_default_profile(profile_path, config_map):
     default_profile_file = (
         '[USER]\n'
         'name = new user\n'
-        f'id = {digest(random.randbytes(160))}'
+        f'id = {int.from_bytes(digest(random.randbytes(160)))}'
         '\n'
         '[INTERFACE]'
     )
-    with open(os.path.join(const.PATH_PROFILES, const.DEFAULT_PROFILE_NAME), 'w+') as profile_file:
+    with open(profile_path, 'w+') as profile_file:
         profile_file.write(default_profile_file)
-    parser = configparser.ConfigParser(allow_no_value=True)
-    parser.read(const.PATH_CONFIG_FILE)
-    parser.set('USER_PROFILES', const.DEFAULT_PROFILE_NAME)
 
-    with open(const.PATH_CONFIG_FILE, 'w+') as fp:
-        parser.write(fp)  # noqa
+    config_map.set('USER_PROFILES', const.DEFAULT_PROFILE_NAME)
 
 
 def set_constants(config_map: configparser.ConfigParser) -> bool:
@@ -173,4 +184,4 @@ def set_constants(config_map: configparser.ConfigParser) -> bool:
 
 
 def print_paths():
-    print("\n".join(f"{x}={getattr(const, x)}" for x in dir(const) if x.startswith("PATH")))
+    print(*(f"{x}={getattr(const, x)}" for x in dir(const) if x.startswith("PATH")), sep="\n")

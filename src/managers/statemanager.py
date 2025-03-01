@@ -4,7 +4,7 @@ import inspect
 import logging
 import math
 import threading
-from asyncio import Queue as _queue
+from asyncio import CancelledError, Queue as _queue
 from typing import Iterable, Optional
 
 from src.avails import useables
@@ -55,6 +55,7 @@ class State:
         self.func = func
         self.args = args
         self.lazy_args = lazy_args
+        self._func_async_task = None
 
     async def _make_function(self):
         func = self.func
@@ -75,11 +76,11 @@ class State:
         @functools.wraps(func)
         async def wrap_in_task(_func):
             f = useables.wrap_with_tryexcept(_func, *self.args)
-            return asyncio.create_task(f())
+            self._func_async_task = asyncio.create_task(f())
 
         @functools.wraps(func)
         def wrap_in_thread(_func):
-            threading.Thread(target=func, args=self.args, daemon=True).start()
+            threading.Thread(target=_func, args=self.args, daemon=True).start()
 
         self.is_coro = inspect.iscoroutinefunction(func)
 
@@ -110,6 +111,20 @@ class State:
     def __repr__(self):
         return f"<State({self.name})>"
 
+    async def stop_if_running(self):
+        if not self._func_async_task:
+            return
+
+        if self._func_async_task.done():
+            return
+        
+        self._func_async_task.cancel(sentinel := object())      
+        try:
+            await self._func_async_task
+        except CancelledError as ce:
+            if any(ce.args) and ce.args[0] is sentinel:
+                return
+            raise
 
 @singleton_mixin
 class StateManager:
@@ -121,15 +136,15 @@ class StateManager:
 
     def __init__(self):
         self.state_queue = _queue()
+        self.states = []
         self.close = False
         self.all_tasks: list[asyncio.Task] = []
 
-    def signal_stopping(self):
+    async def signal_stopping(self):
         self.close = True
-        self.state_queue.put(None)
-        for t in self.all_tasks:
-            if not t.done():
-                t.cancel("finalizing from state manager")
+        self.state_queue.put(None)  # stop processing, this will end the `process_states` and `exit_stack` is invoked 
+        for state in reversed(self.states):
+            await state.stop_if_running()
 
     async def put_state(self, state: Optional[State]):
         await self.state_queue.put(state)
@@ -147,6 +162,6 @@ class StateManager:
         """
         while self.close is False:
             current_state: State = await self.state_queue.get()
+            self.states.append(current_state)
             r = await current_state.enter_state()
-            if isinstance(r, asyncio.Task):
-                self.all_tasks.append(r)
+            assert r is None, "state returned non None value"

@@ -43,7 +43,7 @@ from src.avails.bases import BaseDispatcher
 from src.avails.events import RequestEvent
 from src.avails.mixins import QueueMixIn, ReplyRegistryMixIn
 from src.conduit import webpage
-from src.core.public import DISPATCHS, Dock, addr_tuple, get_this_remote_peer
+from src.core.public import DISPATCHS, addr_tuple, get_this_remote_peer
 from src.transfers import DISCOVERY, REQUESTS_HEADERS
 from src.transfers.transports import DiscoveryTransport
 
@@ -53,14 +53,15 @@ _logger = logging.getLogger(__name__)
 async def discovery_initiate(
         kad_server,
         multicast_address,
+        transport,
         req_dispatcher,
-        transport
+        app_ctx,
 ):
     discover_dispatcher = DiscoveryDispatcher()
     discovery_transport = DiscoveryTransport(transport)
-    await Dock.exit_stack.enter_async_context(discover_dispatcher)
+    await app_ctx.exit_stack.enter_async_context(discover_dispatcher)
     req_dispatcher.register_handler(REQUESTS_HEADERS.DISCOVERY, discover_dispatcher)
-    Dock.dispatchers[DISPATCHS.DISCOVER] = discover_dispatcher
+    app_ctx.dispatchers[DISPATCHS.DISCOVER] = discover_dispatcher
 
     discovery_reply_handler = DiscoveryReplyHandler(kad_server)
     discovery_req_handler = DiscoveryRequestHandler(discovery_transport)
@@ -70,7 +71,8 @@ async def discovery_initiate(
 
     await send_discovery_requests(
         discovery_transport,
-        multicast_address
+        multicast_address,
+        app_ctx,
     )
 
 
@@ -124,7 +126,10 @@ class DiscoveryDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
             raise
 
 
-async def send_discovery_requests(transport: DiscoveryTransport, multicast_addr):
+async def send_discovery_requests(transport: DiscoveryTransport, multicast_addr, app_ctx):
+    kad_server = app_ctx.kademlia_network_server
+    in_network = app_ctx.in_network
+
     this_rp = get_this_remote_peer()
     ping_data = bytes(
         WireData(
@@ -138,8 +143,8 @@ async def send_discovery_requests(transport: DiscoveryTransport, multicast_addr)
 
         async for _ in use.async_timeouts(initial=0.1, max_retries=const.DISCOVER_RETRIES):
             transport.sendto(ping_data, multicast_addr)
-            if Dock.kademlia_network_server.is_bootstrapped:
-                Dock.in_network.set()  # set the signal informing that we are in network
+            if kad_server.is_bootstrapped:
+                in_network.set()  # set the signal informing that we are in network
                 break
 
         _logger.debug(f"sent discovery request to multicast {multicast_addr}")
@@ -147,13 +152,13 @@ async def send_discovery_requests(transport: DiscoveryTransport, multicast_addr)
     async def enter_passive_mode():
         _logger.info(f"entering passive mode for discovery after waiting for {const.DISCOVER_TIMEOUT}s")
         async for _ in use.async_timeouts(initial=0.1, max_retries=-1, max_value=const.DISCOVER_TIMEOUT):
-            if Dock.finalizing.is_set():
+            if app_ctx.finalizing.is_set():
                 return
-            if Dock.kademlia_network_server.is_bootstrapped:
-                Dock.in_network.set()  # set the signal informing that we are in network
+            if kad_server.is_bootstrapped:
+                in_network.set()  # set the signal informing that we are in network
                 continue
 
-            Dock.in_network.clear()  # set to false, signalling that we are no longer connect to network
+            in_network.clear()  # set to false, signalling that we are no longer connect to network
             await send_discovery_packet()
 
     await send_discovery_packet()
@@ -164,7 +169,7 @@ async def send_discovery_requests(transport: DiscoveryTransport, multicast_addr)
     # stay in passive mode and keep sending discovery requests
 
     # try requesting user a host name of peer that is already in network
-    if not Dock.kademlia_network_server.is_bootstrapped:
+    if not kad_server.is_bootstrapped:
         _logger.debug(f"requesting user for peer name after waiting for {const.DISCOVER_TIMEOUT}s")
         await _try_asking_user(transport, ping_data)
 

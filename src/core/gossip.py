@@ -1,21 +1,25 @@
-from src.avails import BaseDispatcher, GossipMessage
+from src.avails import BaseDispatcher, GossipMessage, const
 from src.avails.events import GossipEvent
 from src.avails.mixins import QueueMixIn
 from src.core.peers import get_search_handler
-from src.core.public import Dock, get_gossip
+from src.core.public import get_gossip
 from src.transfers import GOSSIP, GossipTransport, REQUESTS_HEADERS, \
     RumorMongerProtocol, SimpleRumorMessageList
 
 
 class GlobalGossipRumorMessageList(SimpleRumorMessageList):  # inspired from java
-    @staticmethod
-    def _get_list_of_peers():
-        return set(Dock.peer_list.keys())
+    __slots__ = "global_peer_list", 
+    def __init__(self, global_peer_list, *args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.global_peer_list = global_peer_list
+
+    def _get_list_of_peers(self):
+        return set(self.global_peer_list.keys())
 
 
 class GlobalRumorMonger(RumorMongerProtocol):
-    def __init__(self, transport):
-        super().__init__(transport, GlobalGossipRumorMessageList)
+    def __init__(self, transport, global_peer_list):
+        super().__init__(transport, global_peer_list, GlobalGossipRumorMessageList(global_peer_list, const.NODE_POV_GOSSIP_TTL))
 
 
 def GlobalGossipMessageHandler(global_gossiper):
@@ -67,19 +71,20 @@ class GossipDispatcher(QueueMixIn, BaseDispatcher):
         await handler(g_event)
 
 
-def initiate_gossip(data_transport, req_dispatcher):
+def initiate_gossip(data_transport, req_dispatcher, app_ctx):
+    global_gossip = app_ctx.global_gossip
     gossip_transport = GossipTransport(data_transport)
-    Dock.global_gossip = GlobalRumorMonger(gossip_transport)
+    global_gossip = GlobalRumorMonger(gossip_transport, app_ctx.peer_list)
 
     g_dispatcher = GossipDispatcher()
 
     gossip_searcher = get_search_handler()
 
-    gossip_message_handler = GlobalGossipMessageHandler(Dock.global_gossip)
+    gossip_message_handler = GlobalGossipMessageHandler(global_gossip)
     req_handler = GossipSearchReqHandler(
         gossip_searcher,
         gossip_transport,
-        Dock.global_gossip,
+        global_gossip,
         gossip_message_handler
     )
     reply_handler = GossipSearchReplyHandler(gossip_searcher)

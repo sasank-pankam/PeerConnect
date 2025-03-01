@@ -6,7 +6,7 @@ import time
 
 from src.avails import RemotePeer, WireData, connect, const, use
 from src.avails.mixins import QueueMixIn, singleton_mixin
-from src.core.public import Dock, send_msg_to_requests_endpoint
+from src.core.public import send_msg_to_requests_endpoint
 from src.transfers import HEADERS
 
 _logger = logging.getLogger(__name__)
@@ -31,11 +31,10 @@ class CheckRequest:
 
 @singleton_mixin
 class Connectivity(QueueMixIn):
-    __slots__ = 'last_checked', 'stop_flag'
+    __slots__ = 'last_checked',
 
-    def __init__(self, stop_flag=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.last_checked = {}
-        self.stop_flag = stop_flag or Dock.finalizing.is_set
         super().__init__(*args, **kwargs)
 
     async def submit(self, request: CheckRequest):
@@ -104,5 +103,5 @@ def new_check(peer) -> tuple[CheckRequest, asyncio.Future[bool]]:
     return req, connector(req)
 
 
-async def initiate(exit_stack):
-    await exit_stack.enter_async_context(Connectivity())
+async def initiate(app_ctx):
+    await app_ctx.exit_stack.enter_async_context(Connectivity())

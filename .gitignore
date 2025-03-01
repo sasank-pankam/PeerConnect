@@ -1,6 +1,4 @@
-*.ini
-!config.ini
-!default_profile.ini
+configs/profiles/*
 
 logs
 *.log

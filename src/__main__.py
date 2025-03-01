@@ -20,9 +20,9 @@ from src.managers.statemanager import State, StateManager
 
 def initial_states():
     set_paths = State("set paths", configure.set_paths)
-    log_config = State("initiating logging", logmanager.initiate)
-    set_exit_stack = State("setting Dock.exit_stack", bootup.set_exit_stack)
-    load_config = State("loading configurations", configure.load_configs)
+    log_config = State("initiating logging", logmanager.initiate, lazy_args=(lambda:Dock,))
+    set_exit_stack = State("setting Dock.exit_stack", bootup.set_exit_stack, lazy_args=(lambda:Dock,))
+    load_config = State("loading configurations", configure.load_configs, lazy_args=(lambda:Dock,))
     load_profiles = State(
         "loading profiles",
         profilemanager.load_profiles_to_program,
@@ -47,7 +47,7 @@ def initial_states():
     comms = State(
         "initiating comms",
         acceptor.initiate_acceptor,
-        lazy_args=(lambda: Dock.exit_stack, Dock.dispatchers)
+        lazy_args=(lambda: Dock,)
     )
 
     msg_con = State(
@@ -59,11 +59,11 @@ def initial_states():
     ini_request = State(
         "initiating requests",
         requests.initiate,
-        lazy_args=(lambda: Dock.exit_stack, Dock.dispatchers, lambda: Dock.state_manager_handle),
+        lazy_args=(lambda: Dock,),
         is_blocking=True
     )
 
-    connectivity_check = State("connectivity checker", connectivity.initiate, lazy_args=(lambda: Dock.exit_stack,))
+    connectivity_check = State("connectivity checker", connectivity.initiate, lazy_args=(lambda: Dock,))
 
     return tuple(locals().values())
 
@@ -91,7 +91,7 @@ def initiate(states):
             raise cancelled
 
     try:
-        with AnotherRunner(debug=const.debug) as runner:
+        with AnotherRunner(finalizing_flag=Dock.finalizing, debug=const.debug) as runner:
             eventloop.set_eager_task_factory()
             runner.run(_async_initiate())
     except KeyboardInterrupt:

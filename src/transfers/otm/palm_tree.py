@@ -9,7 +9,7 @@ from src.avails import (RemotePeer, WireData, connect, const, use, wire)
 from src.avails.connect import UDPProtocol, get_free_port
 from src.avails.wire import PalmTreeSession, Wire
 from src.core import peers
-from src.core.public import Dock, get_this_remote_peer
+from src.core.public import get_this_remote_peer
 from src.transfers import HEADERS
 from src.transfers.otm.tree import TreeLink
 
@@ -74,11 +74,13 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
 
     def __init__(
             self,
+            global_peer_list,
             session,
             passive_endpoint_addr: tuple[str, int] = None,
             active_endpoint_addr: tuple[str, int] = None,
     ):
 
+        self.global_peer_list = global_peer_list
         self.transport = None
         self.session_task = None
         self.all_tasks = []
@@ -328,7 +330,7 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
 
         self.print_state(f"sampled peers:")
         for peer in sampled_peer_ids:
-            self.print_state(Dock.peer_list.get_peer(peer))
+            self.print_state(self.global_peer_list.get_peer(peer))
 
         for peer_id in sampled_peer_ids:
             try:
@@ -599,7 +601,7 @@ class PalmTreeProtocol:
     request_timeout = 3
     mediator_class = None
 
-    def __init__(self, center_peer, session, peers_list):
+    def __init__(self, center_peer, session, peers_list, all_peers_list):
         """
 
         Builds tree using top down approach
@@ -617,9 +619,9 @@ class PalmTreeProtocol:
             center_peer(RemotePeer) : center peer of the session, usually this peer
             session(PalmTreeSession): session object related to current transfer
             peers_list(list[RemotePeer]): list of remote peer objects participating in transfer
-
+            all_peers_list(PeerList): global list of peers maintained by application network 
         """
-
+        self.global_peer_list = all_peers_list
         self.peer_list = peers_list
         self.center_peer = center_peer
         self.adjacency_list: dict[str: list[RemotePeer]] = defaultdict(list)
@@ -633,6 +635,7 @@ class PalmTreeProtocol:
             self.mediator_class = PalmTreeRelay
 
         self.relay = self.mediator_class(
+            all_peers_list,
             self.session,
             (self.center_peer.ip, get_free_port()),
             center_peer.uri,

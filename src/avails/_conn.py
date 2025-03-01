@@ -51,6 +51,16 @@ class ThroughputMixin:
             self._bytes_total = 0
             self._window_start = current_time
 
+    def _format_rate(self):
+        """Convert KB/s to human-readable format with appropriate units"""
+        rate_kbps = self.rate
+        if rate_kbps < 1:  # Less than 1 KB/s - show in B/s
+            return f"{rate_kbps * 1024:.1f} B/s"
+        elif rate_kbps < 1024:  # Less than 1 MB/s - keep in KB/s
+            return f"{rate_kbps:.1f} KB/s"
+        else:  # 1 MB/s or more
+            return f"{rate_kbps / 1024:.1f} MB/s"
+
     @property
     def last_updated_time(self):
         return self._window_start
@@ -74,7 +84,7 @@ class Sender(_PauseMixIn, _ResumeMixIn, ThroughputMixin):
         return self._update_throughput(len(buf), time.perf_counter())
 
     def __repr__(self):
-        return f"<connect.{type(self).__name__}(>{self.sock.getpeername()}, rate={self.rate}, slow={not self._limiter.is_set()})>"
+        return f"<connect.{type(self).__name__}(>{self.sock.getpeername()}, rate={self._format_rate()}, paused={not self._limiter.is_set()})>"
 
 
 class Receiver(_PauseMixIn, _ResumeMixIn, ThroughputMixin):
@@ -96,7 +106,7 @@ class Receiver(_PauseMixIn, _ResumeMixIn, ThroughputMixin):
         return data
 
     def __repr__(self):
-        return f"<connect.{type(self).__name__}(>{self.sock.getpeername()}, rate={self.rate}, slow={not self._limiter.is_set()})>"
+        return f"<connect.{type(self).__name__}(>{self.sock.getpeername()}, rate={self._format_rate()}, paused={not self._limiter.is_set()})>"
 
 
 class Connection(NamedTuple):

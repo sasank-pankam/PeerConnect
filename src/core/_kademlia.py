@@ -17,7 +17,7 @@ from src.avails.bases import BaseDispatcher
 from src.avails.events import RequestEvent
 from src.core import peers
 from src.core.peerstore import Storage
-from src.core.public import Dock, get_this_remote_peer
+from src.core.public import get_this_remote_peer
 from src.transfers import REQUESTS_HEADERS
 from src.transfers.transports import KademliaTransport
 
@@ -122,15 +122,16 @@ class RPCReceiver(RPCProtocol):
 
     def rpc_search_peers(self, sender, caller_peer, search_string):
         self._check_in(caller_peer)
-        relevant_peers = use.search_relevant_peers(Dock.peer_list, search_string)
+        relevant_peers = use.search_relevant_peers(self.peer_list, search_string)
         return list(map(bytes, relevant_peers))
 
 
 class KadProtocol(RPCCaller, RPCReceiver, protocol.KademliaProtocol):
-    def __init__(self, source_node, storage, ksize):
+    def __init__(self, peer_list, source_node, storage, ksize):
         super().__init__(source_node, storage, ksize)
         self.router = AnotherRoutingTable(self, ksize, source_node)
         self.storage = storage
+        self.peer_list = peer_list
 
     def _check_in(self, peer):
         s = RemotePeer.load_from(peer)
@@ -173,16 +174,21 @@ class AnotherRoutingTable(routing.RoutingTable):
 class PeerServer(network.Server):
     protocol_class = KadProtocol
 
-    def __init__(self, ksize=20, alpha=3, peer_id=None, storage=None):
+    def __init__(self,app_ctx, ksize=20, alpha=3, peer_id=None, storage=None):
         super().__init__(ksize, alpha, peer_id, storage)
         self.add_this_peer_task = None
         self._transport = None
         self.stopping = False
+        self.app_ctx = app_ctx
 
     @override
     async def bootstrap_node(self, addr):
         result = await self.protocol.ping(addr, bytes(self.node))
         return RemotePeer.load_from(result[1]) if result[0] else None
+
+    @override
+    def _create_protocol(self):
+        return self.protocol_class(self.app_ctx.peer_list, self.node, self.storage, self.ksize)
 
     def start(self):
         self.protocol = self._create_protocol()
@@ -238,7 +244,7 @@ class PeerServer(network.Server):
             await asyncio.sleep(const.PERIODIC_TIMEOUT_TO_ADD_THIS_REMOTE_PEER_TO_LISTS)
             if not await self.store_nodes_in_list(closest_list_id, [self.node]):
                 _logger.error("failed adding this peer object to lists")
-                await Dock.in_network.wait()
+                await self.app_ctx.in_network.wait()
 
     async def store_nodes_in_list(self, list_key_id, peer_objs):
         list_key = RemotePeer(list_key_id)
@@ -327,8 +333,8 @@ def register_into_dispatcher(server, dispatcher: BaseDispatcher):
     dispatcher.register_handler(REQUESTS_HEADERS.KADEMLIA, handler)
 
 
-def prepare_kad_server(req_transport):
-    kad_server = PeerServer(storage=Storage())
+def prepare_kad_server(req_transport, app):
+    kad_server = PeerServer(app_ctx=app, storage=Storage())
     kad_server.node = get_this_remote_peer()
     kad_server.start()
     kad_server.transport = KademliaTransport(req_transport)

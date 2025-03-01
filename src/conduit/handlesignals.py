@@ -6,7 +6,6 @@ from src.conduit.handleprofiles import (
 )
 from src.conduit.headers import HANDLE
 from src.core import peers
-from src.core.public import Dock
 from src.managers.statemanager import State
 
 
@@ -36,9 +35,9 @@ class FrontEndSignalDispatcher(BaseDispatcher):
 def _restart(): ...
 
 
-def receive_restart_signal(data: DataWeaver):
+def receive_restart_signal(app_ctx, data: DataWeaver):
     s = State("restarting", func=_restart)
-    Dock.state_manager_handle.state_queue.put(s)
+    app_ctx.state_manager_handle.state_queue.put(s)
 
 
 async def close_app():

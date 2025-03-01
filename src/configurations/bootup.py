@@ -11,7 +11,7 @@ from src.avails.connect import IPAddress
 from src.avails.mixins import AggregatingAsyncExitStack
 from src.conduit import webpage
 from src.configurations import interfaces as _interfaces, logger as _logger
-from src.core.public import Dock, set_current_remote_peer_object
+from src.core.public import set_current_remote_peer_object
 
 
 async def set_ip_config(current_profile):
@@ -30,8 +30,8 @@ async def set_ip_config(current_profile):
     _logger.info(f"{const.THIS_IP=}")
 
 
-def set_exit_stack():
-    Dock.exit_stack = AggregatingAsyncExitStack() if const.debug else Dock.exit_stack
+def set_exit_stack(app):
+    app.exit_stack = AggregatingAsyncExitStack() if const.debug else app.exit_stack
     # use aggregating exit stack if we are in debug, this prints tracebacks more aggressively
 
 
@@ -39,7 +39,7 @@ async def get_ip(current_profile) -> IPAddress:
     interfaces = dict(enumerate(_interfaces.get_interfaces()))
     if const.debug:
         print("-" * 100)
-        print(f"interfaces found: \n{"\n".join(str(i) for i in interfaces.values())}")
+        print(f"interfaces found:",*interfaces.values(), sep="\n")
         print("-" * 100)
 
     assert current_profile is not None, "profile not set exiting"

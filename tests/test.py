@@ -70,9 +70,9 @@ def get_a_peer() -> RemotePeer | None:
 
 def test_initial_states():
     set_paths = State("set paths", configure.set_paths)
-    log_config = State("initiating logging", logmanager.initiate)
-    set_exit_stack = State("setting Dock.exit_stack", bootup.set_exit_stack)
-    load_config = State("loading configurations", configure.load_configs)
+    log_config = State("initiating logging", logmanager.initiate,lazy_args=(lambda:Dock,))
+    set_exit_stack = State("setting Dock.exit_stack", bootup.set_exit_stack, lazy_args=(lambda:Dock,))
+    load_config = State("loading configurations", configure.load_configs, lazy_args=(lambda:Dock,))
     load_profiles = State(
         "loading profiles",
         profilemanager.load_profiles_to_program,
@@ -95,7 +95,7 @@ def test_initial_states():
     comms = State(
         "initiating comms",
         acceptor.initiate_acceptor,
-        lazy_args=(lambda: Dock.exit_stack, Dock.dispatchers)
+        lazy_args=(lambda: Dock,)
     )
 
     msg_con = State(
@@ -107,11 +107,11 @@ def test_initial_states():
     ini_request = State(
         "initiating requests",
         requests.initiate,
-        lazy_args=(lambda: Dock.exit_stack, Dock.dispatchers, lambda: Dock.state_manager_handle),
+        lazy_args=(lambda: Dock,),
         is_blocking=True
     )
-
-    connectivity_check = State("connectivity checker", connectivity.initiate, lazy_args=(lambda: Dock.exit_stack,))
+    
+    connectivity_check = State("connectivity checker", connectivity.initiate, lazy_args=(lambda: Dock,))
 
     # s1 = State("set paths", configure.set_paths)
     # log_config = State("initiating logging", logmanager.initiate)

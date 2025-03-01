@@ -16,14 +16,8 @@ class OTMFilesRelay(PalmTreeRelay):
         from src.transfers.otm.receiver import FilesReceiver
         file_receiver: FilesReceiver
 
-    def __init__(
-            self,
-            file_receiver,
-            session,
-            passive_endpoint_addr,
-            active_endpoint_addr,
-    ):
-        super().__init__(session, passive_endpoint_addr, active_endpoint_addr)
+    def __init__(self, file_receiver, *args,**kwargs):
+        super().__init__(*args, **kwargs)
         self._read_link = None
         self.file_receiver = file_receiver
         # this is a generator `:method: OTMFilesReceiver.data_receiver` that takes byte-chunk inside it

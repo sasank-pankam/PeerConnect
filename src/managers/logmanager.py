@@ -6,12 +6,11 @@ import queue
 from pathlib import Path
 
 from src.avails import const
-from src.core.public import Dock
 
 log_queue = queue.SimpleQueue()
 
 
-async def initiate():
+async def initiate(app):
     log_config = {}
 
     def _loader():
@@ -48,4 +47,4 @@ async def initiate():
         queue_listener = getattr(q_handler, 'listener')
         queue_listener.start()
 
-    Dock.exit_stack.callback(_log_exit)
+    app.exit_stack.callback(_log_exit)
