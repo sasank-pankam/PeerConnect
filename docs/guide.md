@@ -8,7 +8,7 @@
 # Awesome Module/Package
 ```
 
-- Second should have fully qualified module name or package name, with it's hyperlink pointing to source file
+- Second line should have fully qualified module name or package name, with it's hyperlink pointing to source file
 *Note*: this can be optional if doc does not have source file
 
 ```md
