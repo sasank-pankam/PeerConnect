@@ -8,7 +8,7 @@ The primary goal of PeerConnect is to provide fast and efficient data transfers 
 
 - **P2P Communication**: Enables direct data transfer and messaging between peers, eliminating the need for centralized control.
 - **Local Network Optimization**: Tuned for high-performance within local area networks (LANs).
-- **Custom Protocols**: Implements several distributed protocols to optimize communication and data sharing between peers.
+- **Protocols**: Implements several distributed protocols to optimize communication and data sharing between peers.
 - **Standard Library Use**: Core functionality implemented using Python’s standard library to avoid unnecessary dependencies.
 
 ## Internals
@@ -25,6 +25,24 @@ The primary goal of PeerConnect is to provide fast and efficient data transfers 
 - Encryption
 - A good test suite
 - Application is not Chaos-Tested for network partitions
+
+## Usage
+
+  TBD
+
+### Windows
+
+```
+peerconnect.bat
+```
+
+### Linux
+
+```
+peerconnect.sh
+```
+
+- Run the script, if any errors occur raise an issue and include stdout of the script
 
 ### Future Plans
 
@@ -43,25 +61,10 @@ These are not planned for completion but code (Internal High Level APIs) tries i
 
 - **Calls**: Voice and Video Calls
 
-## Usage
+## Branch Info
 
-  TBD
 
-### Windows
-
-```
-peerconnect.bat
-```
-
-### Linux
-
-```
-peerconnect.sh
-```
-
-Run the script, if any errors occur raise an issue and include stdout of the script
-
-## Main Branch
+### Main Branch
 
 The code in the main branch is a functional version of PeerConnect. It employs a **threaded synchronous model** and includes:
 
@@ -70,13 +73,13 @@ The code in the main branch is a functional version of PeerConnect. It employs a
 - **Basic Mesh Network Topology**: Simple peer connections stored locally; works best in small to medium-sized networks (up to 500-1000 peers).
 - **Synchronous Execution**: Uses a basic, custom-built asynchronous event loop written from scratch, though predominantly threaded and synchronous in operation.
 
-### Dependencies
+#### Dependencies
 
 - **[tqdm](https://github.com/tqdm/tqdm)**: Provides progress bars for data transfers in the console.
 - **[pyqt](https://riverbankcomputing.com/software/pyqt/intro)**: Utilized for file picker (though a lighter alternative is desired).
 - **[websockets](https://websockets.readthedocs.io/)**: Facilitates Inter-Process Communication (IPC) between the backend and the frontend.
 
-## Dev Branch (Under Development)
+### Dev Branch
 
 The dev branch is a complete rewrite using Python’s asynchronous features, aiming to scale PeerConnect for **larger, distributed networks** without a centralized entity. This branch includes:
 
@@ -91,6 +94,6 @@ The dev branch is a complete rewrite using Python’s asynchronous features, aim
 - **Scalability**: Expected to handle large networks of over 1500 peers concurrently.
 - **High Speed Data Transfer**: Can transfer big files (with sizes in GBs) using maximum bandwidth
 
-### Additional Dependencies
+#### Additional Dependencies
 
 - **[kademlia](https://github.com/bmuller/kademlia)**: A distributed hash table implementation used for decentralized peer discovery.
