@@ -81,7 +81,7 @@ The file receiver module implements a robust, asynchronous mechanism for file re
    The `recv_files` method enters a loop where it awaits incoming chunks. For each chunk:
    - It aligns the chunk with the corresponding file (in case a chunk spans multiple files).
    - It writes the appropriate slice of data to the file.
-   - It updates the file’s seek position and moves to the next file when one is complete.
+   - It updates the file's seek position and moves to the next file when one is complete.
 
 3. **Completion:**  
    When all files have been received and written to disk, the receiver changes its state to COMPLETED and closes all open file descriptors.
