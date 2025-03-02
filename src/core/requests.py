@@ -13,6 +13,7 @@ from src.core import _kademlia, gossip
 from src.core.discover import discovery_initiate
 from src.core.public import DISPATCHS, Dock
 from src.managers.statemanager import State
+from src.transfers import REQUESTS_HEADERS
 from src.transfers.transports import RequestsTransport
 
 _logger = logging.getLogger(__name__)
@@ -72,7 +73,6 @@ async def initiate(app: Dock):
 
     await state_manager.put_state(discovery_state)
     await state_manager.put_state(add_to_lists)
-    # TODO: introduce context manager support into state-manager.State itself which reduces boilerplate
 
     app.exit_stack.push_async_exit(kad_server)
 
@@ -112,15 +112,28 @@ def _subscribe_to_multicast(sock, multicast_addr):
 
 
 class RequestsDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
+    __slots__ = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.registry[REQUESTS_HEADERS.REQUEST] = {}
+        # for simple handlers
 
     async def submit(self, req_event: RequestEvent):
-        self.msg_arrived(req_event.request)
+
+        if self.is_registered(req_event.request):
+            self.msg_arrived(req_event.request)
+            return
 
         # reply registry and dispatcher's registry are most often mutually exclusive
         # going with try except because the hit rate to the self.registry will be high
         # when compared to reply registry
         try:
-            handler = self.registry[req_event.root_code]
+            if req_event.root_code == REQUESTS_HEADERS.REQUEST:
+                handler = self.registry[req_event.root_code][req_event.request.header]
+                # a simple handler that is associated with requests root-code
+            else:
+                handler = self.registry[req_event.root_code]
         except KeyError:
             return
 
@@ -135,6 +148,12 @@ class RequestsDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
         except Exception as e:
             # we can't afford exceptions here as they move into QueueMixIn
             _logger.warning(f"{handler}({req_event}) failed with \n", exc_info=e)
+
+    def register_simple_handler(self, header, handler):
+        """Register a simple callback against ``REQUESTS_HEADERS.REQUEST``
+        These handlers mostly invoked when a datagram is sent using ``requests_transport``, that has root_code = REQUESTS_HEADERS.REQUEST
+        """
+        self.registry[REQUESTS_HEADERS.REQUEST][header] = handler
 
 
 class RequestsEndPoint(asyncio.DatagramProtocol):

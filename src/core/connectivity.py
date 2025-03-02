@@ -5,9 +5,11 @@ import struct
 import time
 
 from src.avails import RemotePeer, WireData, connect, const, use
+from src.avails.events import RequestEvent
 from src.avails.mixins import QueueMixIn, singleton_mixin
-from src.core.public import send_msg_to_requests_endpoint
+from src.core.public import get_this_remote_peer, requests_dispatcher, send_msg_to_requests_endpoint
 from src.transfers import HEADERS
+from src.transfers.transports import RequestsTransport
 
 _logger = logging.getLogger(__name__)
 
@@ -97,11 +99,22 @@ def new_check(peer) -> tuple[CheckRequest, asyncio.Future[bool]]:
     connector = Connectivity()
     req = CheckRequest(peer, False)
     if fut := connector.check_for_recent(req):
-        # return fast without spawning a task
+        # return fast without spawning a task (within queue mix in)
         return req, fut
 
     return req, connector(req)
 
 
+def EchoHandler(req_transport: RequestsTransport):
+    def handler(req_event: RequestEvent):
+        req = req_event.request
+        data = WireData(req.header, req.msg_id, get_this_remote_peer().peer_id)
+        return req_transport.sendto(bytes(data), req_event.from_addr)
+
+    return handler
+
+
 async def initiate(app_ctx):
     await app_ctx.exit_stack.enter_async_context(Connectivity())
+    req_disp = requests_dispatcher()
+    req_disp.register_simple_handler(HEADERS.REMOVAL_PING, EchoHandler(app_ctx.requests_transport))

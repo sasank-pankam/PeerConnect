@@ -9,7 +9,7 @@ class WebSocketRegistryReStarted(Exception):
     """WebSocketRegistry already started"""
 
 
-class InvalidPacket(Exception):
+class InvalidPacket(TypeError):
     """Ill formed Packet"""
 
 
