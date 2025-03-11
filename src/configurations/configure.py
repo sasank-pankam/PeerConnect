@@ -13,14 +13,15 @@ from kademlia.utils import digest
 import src.avails.constants as const
 from src.avails import connect
 from src.configurations import logger as _logger
+from src.core.app import AppType
 
 
-def print_constants():
-    ip_version = ipaddress.ip_address(const.THIS_IP.ip).version
+def print_app(app):
+    ip_version = ipaddress.ip_address(app.this_ip.ip).version
     print_string = (
         f'\n:configuration choices{"=" * 32}\n'
-        f'{"USERNAME": <15} : {const.USERNAME: <10}\n'
-        f'{"THIS_IP": <15} : {f"{const.THIS_IP}": <10}\n'
+        f'{"USERNAME": <15} : {app.this_remote_peer.username: <10}\n'
+        f'{"THIS_IP": <15} : {f"{app.this_ip}": <10}\n'
         f'{"PROTOCOL": <15} : {f"{const.PROTOCOL}": <10}\n'
         f'{"IP_VERSION": <15} : {ip_version: <10}\n'
         f'{"SERVER_IP": <15} : {f"{const.SERVER_IP}": <10}\n'
@@ -63,26 +64,23 @@ def set_paths():
         const.PATH_DOWNLOAD = os.path.join(const.PATH_CURRENT, 'downloads')
 
 
-async def load_configs(app):
+async def load_configs(app: AppType):
     config_map = configparser.ConfigParser(allow_no_value=True)
 
     def _helper():
         try:
             config_map.read(const.PATH_CONFIG_FILE)
             # access required keys
-            config_map['USER_PROFILES']
-            config_map['NERD_OPTIONS']
-            config_map['VERSIONS']
-            config_map['SELECTED_PROFILE']
+            _ = config_map['USER_PROFILES']
+            _ = config_map['NERD_OPTIONS']
+            _ = config_map['VERSIONS']
+            _ = config_map['SELECTED_PROFILE']
         except KeyError:
             _write_default_configurations(const.PATH_CONFIG_FILE)
             config_map.read(const.PATH_CONFIG_FILE)
 
-        if not (profile_path := Path(const.PATH_PROFILES, const.DEFAULT_PROFILE_NAME)).exists():
-            _write_default_profile(profile_path, config_map)
-
-        if const.DEFAULT_PROFILE_NAME not in config_map['USER_PROFILES']:
-            config_map.set('USER_PROFILES', const.DEFAULT_PROFILE_NAME)
+        if not any(tuple(Path(const.PATH_PROFILES).glob("*.ini"))):
+            _write_default_profile(Path(const.PATH_PROFILES, const.DEFAULT_PROFILE_NAME), config_map)
 
         with open(const.PATH_CONFIG_FILE, 'w+') as fp:
             config_map.write(fp)  # noqa
@@ -105,9 +103,9 @@ async def load_configs(app):
         return await asyncio.to_thread(_finalize_config_helper)
 
     await asyncio.to_thread(_helper)
+    set_constants(config_map)
     app.current_config = config_map
     app.exit_stack.push_async_callback(finalize_config)
-    set_constants(config_map)
 
 
 def _write_default_configurations(path):
@@ -139,16 +137,18 @@ def _write_default_configurations(path):
 
 def _write_default_profile(profile_path, config_map):
     default_profile_file = (
-        '[USER]\n'
-        'name = new user\n'
-        f'id = {int.from_bytes(digest(random.randbytes(160)))}'
-        '\n'
-        '[INTERFACE]'
+        "[USER]\n"
+        "name = new user\n"
+        f"id = {int.from_bytes(digest(random.randbytes(160)))}\n"
+        "\n"
+        "[INTERFACE]\n"
+        "\n"
+        "[TRANSFERS AGREED]\n"
     )
     with open(profile_path, 'w+') as profile_file:
         profile_file.write(default_profile_file)
 
-    config_map.set('USER_PROFILES', const.DEFAULT_PROFILE_NAME)
+    config_map.set('USER_PROFILES', profile_path.name)
 
 
 def set_constants(config_map: configparser.ConfigParser) -> bool:
