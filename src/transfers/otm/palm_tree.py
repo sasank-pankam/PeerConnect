@@ -9,7 +9,6 @@ from src.avails import (RemotePeer, WireData, connect, const, use, wire)
 from src.avails.connect import UDPProtocol, get_free_port
 from src.avails.wire import PalmTreeSession, Wire
 from src.core import peers
-from src.core.public import get_this_remote_peer
 from src.transfers import HEADERS
 from src.transfers.otm.tree import TreeLink
 
@@ -74,17 +73,17 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
 
     def __init__(
             self,
-            global_peer_list,
             session,
+            this_peer,
             passive_endpoint_addr: tuple[str, int] = None,
             active_endpoint_addr: tuple[str, int] = None,
     ):
 
-        self.global_peer_list = global_peer_list
         self.transport = None
         self.session_task = None
         self.all_tasks = []
         self.session: PalmTreeSession = session
+        self.this_peer = this_peer
 
         self.passive_endpoint_addr = passive_endpoint_addr
 
@@ -204,12 +203,12 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
             tree_check_packet (WireData): Contains tree check data.
             addr (tuple): Address of the peer initiating the check.
         """
-        peer = await peers.get_remote_peer_at_every_cost(tree_check_packet.id)
+        peer = await peers.get_remote_peer(tree_check_packet.id)
         self.print_state(f"checking gossip tree {peer.username}, {peer.ip}")
         if self._may_be_make_rejection(tree_check_packet, addr):
             return
 
-        this_peer_id = get_this_remote_peer().peer_id
+        this_peer_id = self.this_peer.peer_id
         sender_id = tree_check_packet.id
         self.__expected_parent_peers.add(tree_check_packet.id)
 
@@ -255,7 +254,7 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
         if reject_reason:
             gossip_link_reject_message = WireData(
                 header=HEADERS.GOSSIP_TREE_REJECT,
-                msg_id=get_this_remote_peer().peer_id,
+                msg_id=self.this_peer.peer_id,
             )
             Wire.send_datagram(self.transport, addr, bytes(gossip_link_reject_message))
             self.print_state(f"rejected gossip tree link {addr}", reject_reason)
@@ -328,10 +327,6 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
 
         sampled_peer_ids = set(peer_ids) - {sender_id} - set(self.active_links.keys())
 
-        self.print_state(f"sampled peers:")
-        for peer in sampled_peer_ids:
-            self.print_state(self.global_peer_list.get_peer(peer))
-
         for peer_id in sampled_peer_ids:
             try:
                 passive_link, active_link = self.all_links[peer_id]
@@ -366,7 +361,7 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
 
         tree_check_packet = WireData(
             header=HEADERS.GOSSIP_TREE_CHECK,
-            msg_id=get_this_remote_peer().peer_id,
+            msg_id=self.this_peer.peer_id,
             message_id=use.get_unique_id(str),
             session_id=self.session.session_id,
         )
@@ -412,7 +407,7 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
         """
         h = WireData(
             header=HEADERS.GOSSIP_UPDATE_STREAM_LINK,
-            msg_id=get_this_remote_peer().peer_id,
+            msg_id=self.this_peer.peer_id,
             session_id=self.session.session_id,
             peer_addr=self.passive_endpoint_addr,
         )
@@ -601,10 +596,10 @@ class PalmTreeProtocol:
     request_timeout = 3
     mediator_class = None
 
-    def __init__(self, center_peer, session, peers_list, all_peers_list):
+    def __init__(self, center_peer, session, peers_list):
         """
 
-        Builds tree using top down approach
+        Builds tree using top-down approach
         # call order :
         # inform peers
         # self.mediator.start_session
@@ -619,9 +614,7 @@ class PalmTreeProtocol:
             center_peer(RemotePeer) : center peer of the session, usually this peer
             session(PalmTreeSession): session object related to current transfer
             peers_list(list[RemotePeer]): list of remote peer objects participating in transfer
-            all_peers_list(PeerList): global list of peers maintained by application network 
         """
-        self.global_peer_list = all_peers_list
         self.peer_list = peers_list
         self.center_peer = center_peer
         self.adjacency_list: dict[str: list[RemotePeer]] = defaultdict(list)
@@ -635,8 +628,8 @@ class PalmTreeProtocol:
             self.mediator_class = PalmTreeRelay
 
         self.relay = self.mediator_class(
-            all_peers_list,
             self.session,
+            self.center_peer,
             (self.center_peer.ip, get_free_port()),
             center_peer.uri,
         )

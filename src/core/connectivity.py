@@ -7,9 +7,9 @@ import time
 from src.avails import RemotePeer, WireData, connect, const, use
 from src.avails.events import RequestEvent
 from src.avails.mixins import QueueMixIn, singleton_mixin
-from src.core.public import get_this_remote_peer, requests_dispatcher, send_msg_to_requests_endpoint
+from src.core.app import AppType
+from src.core.requests import send_request
 from src.transfers import HEADERS
-from src.transfers.transports import RequestsTransport
 
 _logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class Connectivity(QueueMixIn):
         _logger.debug(f"connectivity check initiating for {request}")
 
         try:
-            t = send_msg_to_requests_endpoint(ping_data, request.peer, expect_reply=True)
+            t = send_request(ping_data, request.peer, expect_reply=True)
             await asyncio.wait_for(t, const.PING_TIMEOUT)
             return True
         except TimeoutError:
@@ -105,16 +105,15 @@ def new_check(peer) -> tuple[CheckRequest, asyncio.Future[bool]]:
     return req, connector(req)
 
 
-def EchoHandler(req_transport: RequestsTransport):
+def EchoHandler(app_ctx):
     def handler(req_event: RequestEvent):
         req = req_event.request
-        data = WireData(req.header, req.msg_id, get_this_remote_peer().peer_id)
-        return req_transport.sendto(bytes(data), req_event.from_addr)
+        data = WireData(req.header, req.msg_id, app_ctx.this_peer_id)
+        return app_ctx.requests.transport.sendto(bytes(data), req_event.from_addr)
 
     return handler
 
 
-async def initiate(app_ctx):
+async def initiate(app_ctx: AppType):
     await app_ctx.exit_stack.enter_async_context(Connectivity())
-    req_disp = requests_dispatcher()
-    req_disp.register_simple_handler(HEADERS.REMOVAL_PING, EchoHandler(app_ctx.requests_transport))
+    app_ctx.requests.dispatcher.register_simple_handler(HEADERS.REMOVAL_PING, EchoHandler(app_ctx.read_only()))

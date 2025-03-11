@@ -16,6 +16,7 @@ _logger = logging.getLogger(__name__)
 
 
 async def _create_conn(peer):
+    """Connection helper for Connector.connect"""
     try:
         socket = await connect.connect_to_peer(peer, timeout=1, retries=const.CONNECTION_RETRIES)
     except OSError as oe:
@@ -55,6 +56,11 @@ class Connector(AExitStackMixIn):
 
         Callers should handle any slowdowns in throughput as bandwidth limiting is performed on need
 
+        Notes:
+            * Don't acquire lock of connection object returned, it's done internally and released on context manager exit
+
+            * Can be pruned or slowed down if resource limits are reached
+
         state machine::
 
             [s1 CHECK POOL]--(true)--> [s4 ret conn]
@@ -70,12 +76,6 @@ class Connector(AExitStackMixIn):
           (failed)
               |
           [raise exp]
-
-        Notes:
-            Don't acquire lock of connection object returned, it's done internally
-            and released on context manager exit
-
-            Can be pruned or slowed down if resource limits are reached
 
         Args:
             peer (RemotePeer): to connect

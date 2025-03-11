@@ -43,7 +43,7 @@ from src.avails.bases import BaseDispatcher
 from src.avails.events import RequestEvent
 from src.avails.mixins import QueueMixIn, ReplyRegistryMixIn
 from src.conduit import webpage
-from src.core.public import DISPATCHS, addr_tuple, get_this_remote_peer
+from src.core.app import AppType, ReadOnlyAppType
 from src.transfers import DISCOVERY, REQUESTS_HEADERS
 from src.transfers.transports import DiscoveryTransport
 
@@ -51,20 +51,19 @@ _logger = logging.getLogger(__name__)
 
 
 async def discovery_initiate(
-        kad_server,
         multicast_address,
-        transport,
-        req_dispatcher,
-        app_ctx,
+        app_ctx: AppType,
 ):
     discover_dispatcher = DiscoveryDispatcher()
-    discovery_transport = DiscoveryTransport(transport)
+    discovery_transport = DiscoveryTransport(app_ctx.requests.transport)
     await app_ctx.exit_stack.enter_async_context(discover_dispatcher)
-    req_dispatcher.register_handler(REQUESTS_HEADERS.DISCOVERY, discover_dispatcher)
-    app_ctx.dispatchers[DISPATCHS.DISCOVER] = discover_dispatcher
+    app_ctx.requests.dispatcher.register_handler(REQUESTS_HEADERS.DISCOVERY, discover_dispatcher)
 
-    discovery_reply_handler = DiscoveryReplyHandler(kad_server)
-    discovery_req_handler = DiscoveryRequestHandler(discovery_transport)
+    app_ctx.discovery.dispatcher = discover_dispatcher
+    app_ctx.discovery.transport = discovery_transport
+
+    discovery_reply_handler = DiscoveryReplyHandler(app_ctx.read_only())
+    discovery_req_handler = DiscoveryRequestHandler(app_ctx.read_only())
 
     discover_dispatcher.register_handler(DISCOVERY.NETWORK_FIND_REPLY, discovery_reply_handler)
     discover_dispatcher.register_handler(DISCOVERY.NETWORK_FIND, discovery_req_handler)
@@ -76,33 +75,32 @@ async def discovery_initiate(
     )
 
 
-def DiscoveryReplyHandler(kad_server):
+def DiscoveryReplyHandler(app_ctx: ReadOnlyAppType):
     async def handle(event: RequestEvent):
-        if event.from_addr[0] == const.THIS_IP:
+        if event.from_addr[0] == app_ctx.this_ip.ip:
             return
         connect_address = tuple(event.request["connect_uri"])
         _logger.debug(f"bootstrapping kademlia {connect_address}")
-        if any(await kad_server.bootstrap([connect_address])):
+        if any(await app_ctx.kad_server.bootstrap([connect_address])):
             _logger.debug("bootstrapping completed")
 
     return handle
 
 
-def DiscoveryRequestHandler(discovery_transport):
+def DiscoveryRequestHandler(app_ctx: ReadOnlyAppType):
     async def handle(event: RequestEvent):
         req_packet = event.request
         if req_packet["reply_addr"][0] == const.THIS_IP:
             _logger.debug("ignoring echo")
             return
         _logger.info(f"discovery replying to req: {req_packet.body}")
-        this_rp = get_this_remote_peer()
         data_payload = WireData(
             header=DISCOVERY.NETWORK_FIND_REPLY,
-            msg_id=this_rp.peer_id,
-            connect_uri=this_rp.req_uri[:2],
+            msg_id=app_ctx.this_peer_id,
+            connect_uri=app_ctx.this_remote_peer.req_uri[:2],
         )
-        discovery_transport.sendto(
-            bytes(data_payload), addr_tuple(*req_packet["reply_addr"][:2])
+        app_ctx.discovery.transport.sendto(
+            bytes(data_payload), app_ctx.addr_tuple(*req_packet["reply_addr"][:2])
         )
 
     return handle
@@ -127,32 +125,32 @@ class DiscoveryDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
 
 
 async def send_discovery_requests(transport: DiscoveryTransport, multicast_addr, app_ctx):
-    kad_server = app_ctx.kademlia_network_server
+    kad_server = app_ctx.kad_server
     in_network = app_ctx.in_network
+    finalizing = app_ctx.finalizing
 
-    this_rp = get_this_remote_peer()
     ping_data = bytes(
         WireData(
             DISCOVERY.NETWORK_FIND,
-            this_rp.peer_id,
-            reply_addr=this_rp.req_uri[:2]
+            app_ctx.this_peer_id,
+            reply_addr=app_ctx.this_remote_peer.req_uri[:2]
         )
     )
 
     async def send_discovery_packet():
 
         async for _ in use.async_timeouts(initial=0.1, max_retries=const.DISCOVER_RETRIES):
-            transport.sendto(ping_data, multicast_addr)
             if kad_server.is_bootstrapped:
                 in_network.set()  # set the signal informing that we are in network
                 break
+            transport.sendto(ping_data, multicast_addr)
 
         _logger.debug(f"sent discovery request to multicast {multicast_addr}")
 
     async def enter_passive_mode():
         _logger.info(f"entering passive mode for discovery after waiting for {const.DISCOVER_TIMEOUT}s")
         async for _ in use.async_timeouts(initial=0.1, max_retries=-1, max_value=const.DISCOVER_TIMEOUT):
-            if app_ctx.finalizing.is_set():
+            if finalizing.is_set():
                 return
             if kad_server.is_bootstrapped:
                 in_network.set()  # set the signal informing that we are in network

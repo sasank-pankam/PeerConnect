@@ -7,9 +7,9 @@ import _path  # noqa
 from src.avails import WireData, const
 from src.avails.events import MessageEvent
 from src.avails.exceptions import ResourceBusy
+from src.core.app import AppType, provide_app_ctx
 from src.core.bandwidth import Watcher
 from src.core.connector import Connector
-from src.core.public import Dock, get_this_remote_peer, msg_dispatcher
 from src.managers import message
 from src.managers.statemanager import State
 from src.transfers import HEADERS
@@ -73,7 +73,7 @@ async def test_connection_pool():
     print("[TEST][PASSED] connection found in the expected set")
 
 
-async def test_message():
+async def test_message(app_ctx: AppType):
     peer = get_a_peer()
     assert peer is not None
 
@@ -81,7 +81,7 @@ async def test_message():
 
     ping = WireData(
         header=HEADERS.PING,
-        peer_id=get_this_remote_peer().peer_id,
+        peer_id=app_ctx.this_peer_id,
         msg_id=(ping_id := str(random.randint(1, 1000)))
     )
 
@@ -93,7 +93,7 @@ async def test_message():
 
         return handler
 
-    msg_dispatcher().register_handler(HEADERS.UNPING, UNPingHandlerMock())
+    app_ctx.messages.dispatcher.register_handler(HEADERS.UNPING, UNPingHandlerMock())
 
     async with message.get_msg_conn(peer) as connection:
         await connection.send(ping)
@@ -103,19 +103,20 @@ async def test_message():
     except TimeoutError:
         print("[TEST][FAILED] to send message reason: un ping not received")
     else:
-        msg_dispatcher().remove_handler(HEADERS.UNPING)
+        app_ctx.messages.dispatcher.remove_handler(HEADERS.UNPING)
         print("[TEST][PASSED]  message")
 
 
-async def test_connections():
+@provide_app_ctx
+async def test_connections(app_ctx):
     print("waiting to get into network")
-    await Dock.in_network.wait()
+    await app_ctx.in_network.wait()
 
     print("starting testing connections")
     try:
         await test_connection()
         await test_connection_pool()
-        await test_message()
+        await test_message(app_ctx)
     except Exception:
         print("#@" * 23)  # debug
         traceback.print_exc()

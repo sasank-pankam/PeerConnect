@@ -6,11 +6,12 @@ import queue
 from pathlib import Path
 
 from src.avails import const
+from src.core.app import AppType
 
 log_queue = queue.SimpleQueue()
 
 
-async def initiate(app):
+async def initiate(app: AppType):
     log_config = {}
 
     def _loader():

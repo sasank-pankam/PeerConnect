@@ -1,11 +1,12 @@
 import getpass
 import random
 
-from src.core.public import Dock
+from src.core.app import provide_app_ctx
 from src.managers import ProfileManager, profilemanager
 
 
-async def profile_getter(ip):
+@provide_app_ctx
+async def profile_getter(ip, *, app_ctx=None):
     p = await ProfileManager.add_profile(
         getpass.getuser(),
         {
@@ -30,7 +31,7 @@ async def profile_getter(ip):
     async def delete(*_):
         await ProfileManager.delete_profile(p.file_name)
 
-    Dock.exit_stack.push_async_exit(delete)
+    app_ctx.exit_stack.push_async_exit(delete)
     return p
 
 
