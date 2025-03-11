@@ -113,7 +113,7 @@ class Connection(NamedTuple):
     """
     To represent A p2p connection
 
-    Recommended to use async with which acquires the underlying lock,
+    Recommended to use ``async with`` which acquires the underlying lock,
     this makes sure that resource is kept within
 
     Note:
@@ -152,7 +152,7 @@ class Connection(NamedTuple):
 
 class MsgConnection:
     """Send or Receive WireData object from connection"""
-    __slots__ = '_connection',  # 'recv', 'send'
+    __slots__ = '_connection',
     _connection: Connection
 
     def __init__(self, connection):

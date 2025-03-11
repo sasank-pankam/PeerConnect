@@ -21,6 +21,9 @@ install() {
 }
 
 base_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
+
+export PYTHONPATH="$base_dir:$PYTHONPATH"
+
 venv_dir="$base_dir/venv"
 
 setup_environment() {

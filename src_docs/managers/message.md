@@ -51,16 +51,6 @@ Responsible for managing message processing and dispatching in PeerConnect. It h
   - For each incoming message, it creates a `MessageEvent` and submits it to the `data_dispatcher` for handling.
   - Continuously processes messages as long as the provided finalizer function returns `True`.
 
-### 3. Ping Handling
-
-#### `PingHandler()`
-
-- **Function:**  
-  Returns an asynchronous handler that responds to incoming ping messages.
-- **Behavior:**  
-  - Upon receiving a ping (a `WireData` message), it constructs an "unping" message and sends it back to the originating peer.
-  - Ensures connectivity confirmation using the peer's message connection.
-
 ### 4. Message Connection Management
 
 #### Global Variables
@@ -81,16 +71,21 @@ Responsible for managing message processing and dispatching in PeerConnect. It h
 
 ### 5. Sending Messages
 
-#### `send_message(msg, peer, *, expect_reply=False)`
+```python
+class MsgSender:
+    ...
 
-- **Purpose:**  
-  Sends a `WireData` message to the specified peer.
-- **Workflow:**  
-  - Retrieves or creates a message connection for the peer using `get_msg_conn`.
-  - Sends the message over the connection.
-  - Optionally waits for a reply if `expect_reply` is set to `True`.
 
----
+async def send_message(msg, peer_id):
+    ...
+```
+
+`send_message` function creates a `MsgSender` object if not already createda and calls `send` method
+
+`MsgSender.send` queues the message and waits until bytes are sent to kernel buffers
+
+Once `MsgSender` is created and started, (by entering its async context manager *__aenter__*),
+it deals with reconnecting peer all by itself
 
 ## Summary
 
@@ -100,8 +95,6 @@ The Message Manager Module integrates the following functionalities:
   Incoming messages are queued and dispatched based on their headers to the appropriate handlers.
 - **Connection Management:**  
   A pool of message connections is maintained to efficiently reuse established connections, ensuring that new messages are sent over existing channels when possible.
-- **Ping Support:**  
-  Ping messages are handled to verify connectivity between peers.
 - **Message Sending:**  
   Provides a high-level API (`send_message`) to send messages asynchronously, with optional reply handling.
 

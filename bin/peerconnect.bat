@@ -1,4 +1,4 @@
-@echo off
+@REM @echo off
 setlocal enabledelayedexpansion
 
 :: Configuration section
@@ -9,15 +9,13 @@ set "venv_dir=%base_dir%\.venv"
 set "req_file=%base_dir%\requirements.txt"
 set "flag_file=%script_dir%.setup_completed"
 set "app_module=src"
+set "PYTHONPATH=%base_dir%;%PYTHONPATH%"
 
 :: Check for existing setup
 if exist "%flag_file%" (
     echo Existing setup detected. Launching application...
-    call "%venv_dir%\Scripts\activate.bat" && (
-        cd /d "%base_dir%"
-        python -m "%app_module%"
-        deactivate
-    )
+    call :execute
+    call :cleanup
     exit /b 0
 )
 
@@ -45,9 +43,14 @@ if not exist "%req_file%" (
 :: Setup process
 echo Initializing new setup...
 echo Creating virtual environment...
-%py_cmd% -m venv "%venv_dir%" || (
-    echo Failed to create virtual environment
-    exit /b 1
+if not exist "%venv_dir%" (
+    %py_cmd% -m venv "%venv_dir%" || (
+        echo Failed to create virtual environment
+        exit /b 1
+    )
+)
+else (
+    echo Found an environment, skipping creation 
 )
 
 call "%venv_dir%\Scripts\activate.bat"
@@ -63,16 +66,19 @@ echo. > "%flag_file%"
 echo Setup completed successfully. Created verification flag.
 
 :: Launch application
-cd /d "%base_dir%"
-python -m "%app_module%" || (
-    echo Application failed to start
-    exit /b 1
+
+:execute
+call "%venv_dir%\Scripts\activate.bat" && (
+    cd /d "%base_dir%"
+    python -m "%app_module%"
+    deactivate
 )
+exit /b 0
 
 :: Cleanup
+:cleanup
 deactivate
 echo.
 set /p "clear=Clear screen? [y/N]: "
 if /i "!clear!"=="y" cls
-
 endlocal

@@ -17,7 +17,7 @@ The primary goal of PeerConnect is to provide fast and efficient data transfers 
 - **Kademlia**: Is used in the overlay routing
 - **Messaging**: Direct messaging is used, a combination of datagram and stream protocols are used
 
-> Visit [here](<https://excalidraw.com/?#json=JwupHwQ7QuQyK1BEYFhdl,528_biXX7getTXAvT763uw>) for diagrams
+> Visit [here](<https://excalidraw.com/#json=aI4_uKCb50o2nOd0vPUJW,zyZRSVlXfsGfvdF7ELXeDQ>) for diagrams
 
 ### What it Lacks
 
