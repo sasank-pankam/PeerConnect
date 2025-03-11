@@ -91,10 +91,15 @@ class TCPProtocol(NetworkProtocol):
             fileno: Optional[int] = None,
     ):
         server_sock = Socket(family, _socket.SOCK_STREAM, -1, fileno)
-        server_sock.bind(bind_address)
-        server_sock.setblocking(False)
-        server_sock.set_loop(loop)
-        server_sock.listen(backlog)
+        try:
+            server_sock.bind(bind_address)
+            server_sock.setblocking(False)
+            server_sock.set_loop(loop)
+            server_sock.listen(backlog)
+        except OSError as oe:
+            oe.add_note(f"addr: {bind_address}, family: {family}")
+            raise oe
+    
         return server_sock
 
     @staticmethod
