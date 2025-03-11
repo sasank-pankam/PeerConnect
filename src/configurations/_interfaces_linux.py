@@ -13,7 +13,10 @@ def get_interfaces(
     address_family: socket.AF_INET | socket.AF_INET6,
 ) -> list[IPAddress]:
     # Load the C library (adjust the name if needed on your system)
-    libc = ctypes.CDLL("libc.so.6")
+    try:
+        libc = ctypes.CDLL("libc.so.6")
+    except OSError:
+        libc = ctypes.CDLL("libc.dylib")
 
     # Define the basic sockaddr structure
     class sockaddr(ctypes.Structure):
