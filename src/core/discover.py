@@ -53,9 +53,10 @@ _logger = logging.getLogger(__name__)
 async def discovery_initiate(
         multicast_address,
         app_ctx: AppType,
+        transport,
 ):
     discover_dispatcher = DiscoveryDispatcher()
-    discovery_transport = DiscoveryTransport(app_ctx.requests.transport)
+    discovery_transport = DiscoveryTransport(transport)
     await app_ctx.exit_stack.enter_async_context(discover_dispatcher)
     app_ctx.requests.dispatcher.register_handler(REQUESTS_HEADERS.DISCOVERY, discover_dispatcher)
 
@@ -69,7 +70,6 @@ async def discovery_initiate(
     discover_dispatcher.register_handler(DISCOVERY.NETWORK_FIND, discovery_req_handler)
 
     await send_discovery_requests(
-        discovery_transport,
         multicast_address,
         app_ctx,
     )
@@ -124,10 +124,11 @@ class DiscoveryDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
             raise
 
 
-async def send_discovery_requests(transport: DiscoveryTransport, multicast_addr, app_ctx):
+async def send_discovery_requests(multicast_addr, app_ctx):
     kad_server = app_ctx.kad_server
     in_network = app_ctx.in_network
     finalizing = app_ctx.finalizing
+    transport = app_ctx.discovery.transport
 
     ping_data = bytes(
         WireData(

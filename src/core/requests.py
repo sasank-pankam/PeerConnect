@@ -53,6 +53,7 @@ async def initiate(app: AppType):
         discovery_initiate,
         multicast_address,
         app,
+        transport,
         is_blocking=True,
     )
 
@@ -168,6 +169,7 @@ class RequestsEndPoint(asyncio.DatagramProtocol):
     def datagram_received(self, actual_data, addr):
         code, stripped_data = actual_data[:1], actual_data[1:]
         try:
+            print(f"{code=}", stripped_data)  # debug
             req_data = unpack_datagram(stripped_data)
         except InvalidPacket as ip:
             _logger.info(f"error:", exc_info=ip)
