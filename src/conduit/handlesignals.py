@@ -19,7 +19,7 @@ class FrontEndSignalDispatcher(BaseDispatcher):
         try:
             await self.registry[data_weaver.header](data_weaver)
         except Exception as exp:
-            logger.error("signal dispatcher", exc_info=exp)
+            logger.error(f"signal dispatcher data:{data_weaver}", exc_info=exp)
 
     def register_all(self):
         self.registry.update({
