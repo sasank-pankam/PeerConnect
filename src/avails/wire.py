@@ -277,41 +277,25 @@ class DataWeaver:
     def content(self):
         return self.__data["content"]
 
-    @content.setter
-    def content(self, _content):
-        self.__data["content"] = _content
-
     @property
     def header(self):
         return self.__data["header"]
-
-    @header.setter
-    def header(self, _header):
-        self.__data["header"] = _header
 
     @property
     def peer_id(self):
         return self.__data["peerId"]
 
-    @peer_id.setter
-    def peer_id(self, peer_id):
-        self.__data["peerId"] = peer_id
-
     @property
     def msg_id(self):
         return self.__data["msgId"]
 
-    @msg_id.setter
-    def msg_id(self, message_id):
-        self.__data["msgId"] = message_id
-
     @property
-    def id(self):  # just for compatibility with registry mix in class
+    def id(self):  # just for compatibility with reply-registry-mix-in class
         return self.msg_id
 
     @property
     def type(self):
-        return str(self.header[0])
+        return str(self.header)[0]
 
     def __str__(self):
         return _json.dumps(self.__data)
@@ -343,41 +327,21 @@ class GossipMessage:
     def message(self):
         return self.actual_data.body.get("message", None)
 
-    @message.setter
-    def message(self, data):
-        self.actual_data.body["message"] = data
-
     @property
     def ttl(self):
         return self.actual_data.body.get("ttl", None)
-
-    @ttl.setter
-    def ttl(self, ttl):
-        self.actual_data.body["ttl"] = ttl
 
     @property
     def created(self):
         return self.actual_data.body.get("created", None)
 
-    @created.setter
-    def created(self, value):
-        self.actual_data.body["created"] = value
-
     @property
     def header(self):
         return self.actual_data.header
 
-    @header.setter
-    def header(self, value):
-        self.actual_data._header = value
-
     @property
     def id(self):
-        return self.actual_data.id
-
-    @id.setter
-    def id(self, value):
-        self.actual_data.id = value
+        return self.actual_data.msg_id
 
     def fields_check(self):
         wire_data = self.actual_data

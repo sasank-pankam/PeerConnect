@@ -10,11 +10,11 @@ import sys
 import threading
 import traceback
 import typing
+import uuid
 from pathlib import Path
 from socket import AddressFamily, IPPROTO_TCP, IPPROTO_UDP
 from sys import _getframe  # noqa
 from typing import Annotated, Awaitable, Final
-from uuid import uuid4
 
 import select
 
@@ -25,14 +25,36 @@ def func_str(func_name):
     return f"{func_name.__name__}()\\{os.path.relpath(func_name.__code__.co_filename)}"
 
 
-def get_unique_id(_type: type = str):
+def get_unique_id(_type: type = str, *, u_version="1"):
+    id_gen = getattr(uuid, "uuid" + u_version)
     if _type == bytes:
-        return uuid4().bytes
-    return _type(uuid4())
+        return id_gen().bytes
+    return _type(id_gen())
 
 
 SHORT_INT = 4
 LONG_INT = 8
+
+
+async def safe_cancel_task(task):
+    """Cancels task and waits until it returns
+
+    Handles the case when the parent task gets cancelled and catching that cancelled error misjudges event loop
+
+    Notes:
+        Make sure that ``task`` is active and not done, if it's result already available then we may get an invalid
+        state exception
+    Args:
+        task(asyncio.Task): task to cancel
+    """
+
+    task.cancel(sentinel := object())
+    try:
+        return await task
+    except asyncio.CancelledError as ce:
+        if any(ce.args) and (sentinel in ce.args):
+            return
+        raise
 
 
 def shorten_path(path: Path, max_length):

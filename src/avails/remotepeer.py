@@ -123,6 +123,10 @@ class RemotePeer:
             f' st={self.status})'
         )
 
+    @property
+    def is_online(self):
+        return self.status == self.ONLINE
+
     def __bool__(self):
         return bool(self.username or self.id or self.req_uri or self.uri)
 

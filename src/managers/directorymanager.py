@@ -8,8 +8,8 @@ from src.avails import TransfersBookKeeper, Wire, WireData, const, get_dialog_ha
 from src.avails.events import ConnectionEvent
 from src.avails.exceptions import TransferRejected
 from src.conduit import webpage
+from src.core.app import ReadOnlyAppType, provide_app_ctx
 from src.core.connector import Connector
-from src.core.public import get_this_remote_peer
 from src.transfers import HEADERS
 from src.transfers.files import DirReceiver, DirSender, rename_directory_with_increment
 from src.transfers.status import StatusMixIn
@@ -24,17 +24,16 @@ async def open_dir_selector():
     return await result
 
 
-async def send_directory(remote_peer, dir_path):
+@provide_app_ctx
+async def send_directory(remote_peer, dir_path, *, app_ctx=None):
     dir_path = Path(dir_path)
     transfer_id = transfers_book.get_new_id()
     dir_recv_signal_packet = WireData(
         header=HEADERS.CMD_RECV_DIR,
-        peer_id=get_this_remote_peer().peer_id,
+        peer_id=app_ctx.this_peer_id,
         transfer_id=transfer_id,
         dir_name=dir_path.name,
     )
-    # from src.core.connections import Connector
-    # connection = await Connector.get_connection(remote_peer)
     connector = Connector()
 
     async with connector.connect(remote_peer) as connection:
@@ -64,17 +63,16 @@ async def send_directory(remote_peer, dir_path):
 
 
 async def _get_confirmation(connection):
-    timeout = 100000  # TODO: structure better
     try:
-        confirmation = await connection.recv(1)
+        confirmation = await asyncio.wait_for(connection.recv(1), const.DEFAULT_TRANSFER_TIMEOUT)
         if confirmation == b'\x00':
             _logger.info("not sending directory, other end rejected")
             raise TransferRejected()
     except asyncio.TimeoutError:
-        _logger.info(f"not sending directory, did not receive confirmation within {timeout} seconds")
+        _logger.info(f"not sending directory, did not receive confirmation within {const.DEFAULT_TRANSFER_TIMEOUT}s")
         raise
     except ConnectionResetError:
-        _logger.error("not sending directory", exc_info=True)
+        _logger.debug("not sending directory", exc_info=True)
         raise
 
 
@@ -87,7 +85,7 @@ def pause_transfer(peer_id, transfer_id):
     transfers_book.add_to_continued(peer_id, transfer_handle)
 
 
-def DirConnectionHandler(app_ctx):
+def DirConnectionHandler(app_ctx: ReadOnlyAppType):
     async def handler(event: ConnectionEvent):
         connection = event.connection
 
@@ -108,7 +106,15 @@ def DirConnectionHandler(app_ctx):
         receiver.connection_made(connection)
         try:
             async with connection:  # acquire lock
-                await connection.send(b'\x01')  # TODO: get confirmation from user
+                what = await webpage.get_transfer_ok(app_ctx.current_profile, peer.peer_id)
+                if not what:
+                    await connection.send(
+                        b"\x00"
+                    )
+                    return
+
+                await connection.send(b"\x01")
+
                 transfers_book.add_to_current(transfer_id, receiver)
                 _logger.info(
                     f"receiving directory from {peer}, saving at {use.shorten_path(dir_path, 40)}"
@@ -130,4 +136,3 @@ def DirConnectionHandler(app_ctx):
             print("*" * 80, e)  # debug
 
     return handler
-

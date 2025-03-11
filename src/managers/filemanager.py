@@ -11,8 +11,8 @@ from src.avails.events import ConnectionEvent
 from src.avails.exceptions import TransferIncomplete, TransferRejected
 from src.conduit import webpage
 from src.core import peers
+from src.core.app import ReadOnlyAppType, provide_app_ctx
 from src.core.connector import Connector
-from src.core.public import get_this_remote_peer
 from src.transfers import HEADERS, TransferState, files, otm
 from src.transfers.status import StatusMixIn
 
@@ -22,14 +22,15 @@ _logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def send_files_to_peer(peer_id, selected_files):
+@provide_app_ctx
+async def send_files_to_peer(peer_id, selected_files, *, app_ctx=None):
     """Sends provided files to peer with ``peer_id``
     Gets peer information from peers module
 
     Args:
         peer_id(str): id of peer to send file to
         selected_files(list[str | Path]): list of file paths
-
+        app_ctx(ReadOnlyAppType): application context to get this remote peer
     Yields:
         files.Sender object
     """
@@ -38,13 +39,13 @@ async def send_files_to_peer(peer_id, selected_files):
         # if any transfer is running just attach FileItems to that transfer
         file_sender_handle.attach_files(selected_files)
         return
-    
-    peer = await peers.get_remote_peer_at_every_cost(peer_id)
+
+    peer = await peers.get_remote_peer(peer_id)
     file_sender, status_updater = await _send_setup(peer, selected_files)
     yield_decision = status_updater.should_yield
 
     try:
-        async with _sender_helper(file_sender, peer_id) as sender:
+        async with _sender_helper(file_sender, peer_id, this_peer_id=app_ctx.this_peer_id) as sender:
             yield file_sender
 
             async for _ in sender:
@@ -73,14 +74,13 @@ async def _send_setup(peer, selected_files):
 
 
 @asynccontextmanager
-async def _sender_helper(file_sender, peer_id):
+async def _sender_helper(file_sender, peer_id, *, this_peer_id):
     async with AsyncExitStack() as stack:
         try:
             may_be_confirmed = True
-            connection = await stack.enter_async_context(prepare_connection(file_sender))
+            connection = await stack.enter_async_context(prepare_connection(file_sender, this_peer_id))
             file_sender.connection_made(connection)
-            accepted = await connection.recv(1)
-            # accepted = await asyncio.wait_for(connection.recv(1), const.DEFAULT_TRANSFER_TIMEOUT)
+            accepted = await asyncio.wait_for(connection.recv(1), const.DEFAULT_TRANSFER_TIMEOUT)
             print(f"{accepted=}")  # debug
             if accepted == b'\x00':
                 may_be_confirmed = False
@@ -99,7 +99,7 @@ async def _sender_helper(file_sender, peer_id):
 
 
 @asynccontextmanager
-async def prepare_connection(sender_handle):
+async def prepare_connection(sender_handle, this_peer_id):
     _logger.debug(f"changing state to connection")  # debug
     sender_handle.state = TransferState.CONNECTING
 
@@ -110,7 +110,7 @@ async def prepare_connection(sender_handle):
             header=HEADERS.CMD_FILE_CONN,
             version=sender_handle.version,
             file_id=sender_handle.id,
-            peer_id=get_this_remote_peer().peer_id,
+            peer_id=this_peer_id,
         )
         _logger.debug(f"authorization header sent for file connection {sender_handle.id}")
         await Wire.send_msg(connection, handshake)
@@ -146,7 +146,7 @@ async def file_receiver(file_req: WireData, connection: connect.Connection, stat
 
     peer_id = file_req.peer_id
     version = file_req.version
-    peer_obj = await peers.get_remote_peer_at_every_cost(peer_id)
+    peer_obj = await peers.get_remote_peer(peer_id)
     file_handle = files.Receiver(
         peer_obj,
         file_req['file_id'],
@@ -166,7 +166,7 @@ async def file_receiver(file_req: WireData, connection: connect.Connection, stat
             transfers_book.add_to_continued(file_req.id, file_handle)
 
 
-def FileConnectionHandler():
+def FileConnectionHandler(app_ctx):
     async def handler(event: ConnectionEvent):
         file_req = event.handshake
         _logger.info(f"new file connection arrived transfer_id={file_req['file_id']}")
@@ -175,11 +175,13 @@ def FileConnectionHandler():
             transfer_handle.connection_made(event.connection)
             return
 
-            # if not await webpage.get_transfer_ok(event.handshake.peer_id):  # TODO: ask webpage
-        #     await event.transport.send(b'\x00')
-        #     return
-
-        await event.connection.send(b'\x01')
+        what = await webpage.get_transfer_ok(app_ctx.current_profile, event.handshake.peer_id)
+        if not what:
+            await event.connection.send(
+                b"\x00"
+            )
+            return
+        await event.connection.send(b"\x01")
 
         _logger.debug(f"scheduling file transfer request {file_req!r}")
 
@@ -228,7 +230,6 @@ def OTMConnectionHandler():
             await otm_relay.otm_add_stream_link(event.connection, link_data)
         else:
             _logger.error(f"otm session not found with id={session_id}")
-            _logger.error(f"ignoring request from {event.connection.socket.getpeername()}")
 
     return handler
 
@@ -242,9 +243,11 @@ async def open_file_selector():
     return result
 
 
-def start_new_otm_file_transfer(files_list: list[Path], peers: list[RemotePeer]):
+@provide_app_ctx
+def start_new_otm_file_transfer(files_list: list[Path], peers: list[RemotePeer], *, app_ctx=None):
     file_sender = otm.FilesSender(
         file_list=files_list,
+        this_peer=app_ctx.this_remote_peer,
         peers=peers,
         timeout=3,
     )
@@ -252,7 +255,8 @@ def start_new_otm_file_transfer(files_list: list[Path], peers: list[RemotePeer])
     return file_sender
 
 
-def new_otm_request_arrived(req_data: WireData, addr):
+@provide_app_ctx
+def new_otm_request_arrived(req_data: WireData, _, *, app_ctx):
     session = OTMSession(
         originate_id=req_data.id,
         session_id=req_data['session_id'],
@@ -263,10 +267,11 @@ def new_otm_request_arrived(req_data: WireData, addr):
         file_count=req_data['file_count'],
         chunk_size=req_data['chunk_size'],
     )
-    this_peer = get_this_remote_peer()
+    this_peer = app_ctx.this_remote_peer
     passive_endpoint_address = (this_peer.ip, connect.get_free_port())
     receiver = otm.FilesReceiver(
         session,
+        app_ctx.this_remote_peer,
         passive_endpoint_address,
         this_peer.uri
     )

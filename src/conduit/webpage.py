@@ -1,23 +1,33 @@
-from src.avails import DataWeaver, RemotePeer
+from src.avails import DataWeaver, RemotePeer, use
 from src.conduit import headers
 from src.conduit.pagehandle import front_end_data_dispatcher
+from src.managers import ProfileManager
 
 
 async def ask_for_interface_choice(interfaces):
     reply = await front_end_data_dispatcher(
         DataWeaver(
             header=headers.GET_INTERFACE_CHOICE,
-            content={k: v._asdict() for k, v in interfaces}
+            content={k: getattr(v, "_asdict")() for k, v in interfaces}
         ),
         expect_reply=True
     )
     return reply.content.get("interface_id", None)
 
 
+async def msg_arrived(header, message, peer_id):
+    front_end_data_dispatcher(DataWeaver(
+        header=header,
+        content=message,
+        peer_id=peer_id,
+    ))
+
+
 async def ask_user_for_a_peer():
     reply = await front_end_data_dispatcher(
         DataWeaver(
             header=headers.REQ_PEER_NAME_FOR_DISCOVERY,
+            msg_id=use.get_unique_id(str)
         ),
         expect_reply=True,
     )
@@ -26,7 +36,13 @@ async def ask_user_for_a_peer():
 
 async def failed_to_reach(peer):
     front_end_data_dispatcher(
-        DataWeaver(header=headers.FAILED_TO_REACH, content={"peer": peer})
+        DataWeaver(header=headers.FAILED_TO_REACH, content={"peer": list(iter(peer))})
+    )
+
+
+async def peer_connected(peer):
+    front_end_data_dispatcher(
+        DataWeaver(header=headers.PEER_CONNECTED, content={"peer": list(iter(peer))})
     )
 
 
@@ -42,7 +58,10 @@ async def update_peer(peer):
     front_end_data_dispatcher(data)
 
 
-async def get_transfer_ok(peer_id):
+async def get_transfer_ok(profile: ProfileManager, peer_id):
+    if (agreed := profile.transfers_agreed.get(peer_id, None)) is not None:
+        return agreed
+
     confirmation = await front_end_data_dispatcher(
         DataWeaver(
             header=headers.REQ_FOR_FILE_TRANSFER,
@@ -50,6 +69,10 @@ async def get_transfer_ok(peer_id):
         ),
         expect_reply=True
     )
+
+    if (remember := confirmation.content["remember"]) is not None:
+        await profile.add_transfers_agreed(peer_id, remember)
+
     return bool(confirmation.content['confirmed'])
 
 
@@ -116,7 +139,9 @@ async def send_profiles_and_get_updated_profiles(profiles, interfaces):
         header=headers.PEER_LIST,
         content={
             "profiles": profiles,
-            "interfaces": {k: v._asdict() for k, v in interfaces}
-        }
+            "interfaces": [getattr(v, '_asdict')() for v in interfaces]
+        },
+        msg_id=use.get_unique_id(str)
     )
+
     return (await front_end_data_dispatcher(userdata, expect_reply=True)).content
