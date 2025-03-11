@@ -49,7 +49,7 @@ class IPAddress(NamedTuple):
         if ip.version == 6:
             ipaddr = str(ip)
             flow_info = 0
-            scope_id = 0 if self.scope_id < 0 else self.scope_id
+            scope_id = 0 if int(self.scope_id) < 0 else int(self.scope_id)
             return ipaddr, port, flow_info, scope_id
 
 

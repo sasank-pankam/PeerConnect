@@ -3,6 +3,7 @@ All the stuff related to kademlia goes here
 """
 
 import asyncio
+import os
 import pickle
 from pathlib import Path
 from typing import override
@@ -293,7 +294,6 @@ class PeerServer(network.Server):
         """
         peer = RemotePeer(byte_id=byte_id)
         nodes = self.protocol.router.find_neighbors(peer)
-
         spider = NodeSpiderCrawl(self.protocol, peer, nodes,
                                  self.ksize, self.alpha)
         found_peers = await spider.find()
@@ -326,6 +326,9 @@ class PeerServer(network.Server):
         return False
 
     async def load_state(self):  # noqa
+        if not os.path.exists(self.state_dump_file):
+            return
+
         def _file_read_helper():
             with open(self.state_dump_file, 'rb') as file:
                 _data = pickle.load(file)

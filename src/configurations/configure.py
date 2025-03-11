@@ -42,7 +42,7 @@ def set_paths():
     const.PATH_CURRENT = Path(os.getcwd())
     const.PATH_LOG = Path(const.PATH_CURRENT, 'logs')
     const.PATH_LOG.mkdir(exist_ok=True)
-    const.PATH_PAGE = Path(const.PATH_CURRENT, 'webpage')
+    const.PATH_PAGE = Path(const.PATH_CURRENT, 'src', 'webpage')
     config_path = Path(const.PATH_CURRENT, 'configs')
     config_path.mkdir(exist_ok=True)
     const.PATH_CONFIG_FILE = Path(config_path, const.DEFAULT_CONFIG_FILE_NAME)

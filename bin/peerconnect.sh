@@ -16,7 +16,7 @@ install() {
     $runner -m pip install --upgrade pip > /dev/null
     echo "Found pip"
     echo "Installing missing dependencies"
-    $runner -m pip install -r $base_dir/bin/requirements.txt > /dev/null
+    $runner -m pip install -r $base_dir/requirements.txt > /dev/null
     echo "Installed dependencies sucessfully"
 }
 

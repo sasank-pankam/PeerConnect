@@ -65,7 +65,7 @@ async def initiate(app: AppType):
     await app.state_manager_handle.put_state(discovery_state)
     await app.state_manager_handle.put_state(add_to_lists)
 
-    await app.exit_stack.enter_context(kad_server)
+    await app.exit_stack.enter_async_context(kad_server)
 
 
 async def setup_endpoint(bind_address, multicast_address, req_dispatcher):
