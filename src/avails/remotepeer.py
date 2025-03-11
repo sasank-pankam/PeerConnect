@@ -4,12 +4,10 @@ from src.avails import const
 
 
 class RemotePeer:
-    ONLINE = 1
-    OFFLINE = 0
     """Used to represent a peer details in network
 
     There are some attributes that are kept to keep this class compatible with kademlia package
-    This Follows a structure that is required by kademila package's Node
+    Follows a structure that is required by kademila package's Node
     and added extra things used by code
 
     Note:
@@ -22,8 +20,11 @@ class RemotePeer:
 
         * If any attributes are added then they should be added to __iter__ method
     """
-    version = const.VERSIONS['RP']
 
+    ONLINE = 1
+    OFFLINE = 0
+
+    version = const.VERSIONS['RP']
     __annotations__ = {
         'username': str,
         'uri': tuple[str, int],
@@ -75,11 +76,11 @@ class RemotePeer:
 
     @property
     def uri(self):
-        return self.ip, self._conn_port
+        return const.THIS_IP.addr_tuple(port=self._conn_port, ip=self.ip)
 
     @property
     def req_uri(self):
-        return self.ip, self._req_port
+        return const.THIS_IP.addr_tuple(port=self._req_port, ip=self.ip)
 
     @classmethod
     def load_from(cls, data: bytes):
@@ -121,6 +122,10 @@ class RemotePeer:
             f' req={self._req_port},'
             f' st={self.status})'
         )
+
+    @property
+    def is_online(self):
+        return self.status == self.ONLINE
 
     def __bool__(self):
         return bool(self.username or self.id or self.req_uri or self.uri)

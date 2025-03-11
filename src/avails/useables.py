@@ -10,11 +10,11 @@ import sys
 import threading
 import traceback
 import typing
+import uuid
 from pathlib import Path
 from socket import AddressFamily, IPPROTO_TCP, IPPROTO_UDP
 from sys import _getframe  # noqa
 from typing import Annotated, Awaitable, Final
-from uuid import uuid4
 
 import select
 
@@ -25,14 +25,36 @@ def func_str(func_name):
     return f"{func_name.__name__}()\\{os.path.relpath(func_name.__code__.co_filename)}"
 
 
-def get_unique_id(_type: type = str):
+def get_unique_id(_type: type = str, *, u_version="1"):
+    id_gen = getattr(uuid, "uuid" + u_version)
     if _type == bytes:
-        return uuid4().bytes
-    return _type(uuid4())
+        return id_gen().bytes
+    return _type(id_gen())
 
 
 SHORT_INT = 4
 LONG_INT = 8
+
+
+async def safe_cancel_task(task):
+    """Cancels task and waits until it returns
+
+    Handles the case when the parent task gets cancelled and catching that cancelled error misjudges event loop
+
+    Notes:
+        Make sure that ``task`` is active and not done, if it's result already available then we may get an invalid
+        state exception
+    Args:
+        task(asyncio.Task): task to cancel
+    """
+
+    task.cancel(sentinel := object())
+    try:
+        return await task
+    except asyncio.CancelledError as ce:
+        if any(ce.args) and (sentinel in ce.args):
+            return
+        raise
 
 
 def shorten_path(path: Path, max_length):
@@ -117,7 +139,7 @@ async def async_timeouts(*, initial=0.001, factor=2, max_retries=const.MAX_RETIR
         >>>     # any working code that needs to be executed with delays
     """
 
-    for timeout in get_timeouts(initial,factor, max_retries, max_value):
+    for timeout in get_timeouts(initial, factor, max_retries, max_value):
         await asyncio.sleep(timeout)
         yield
 
@@ -133,7 +155,7 @@ def echo_print(*args, **kwargs):
 
 
 def async_input(helper_str=""):
-    return asyncio.get_event_loop().run_in_executor(None, input, helper_str)
+    return asyncio.to_thread(input, helper_str)
 
 
 def open_file(content):
@@ -186,6 +208,23 @@ def from_coroutine(level=2, _cache={}):  # noqa
         else:
             _cache[f_code] = False
             return False
+
+
+def sync(coro):
+    """Sync hack to coro
+    As coroutines are iterators internally so it's fine
+
+    Note:
+        works only if there is not much awaiting happening within coro
+        Don't pass asyncio.Future, it is clever ;)
+
+    Args:
+        coro: coroutine that needs to be completed on
+    """
+    try:
+        return coro.send(None)
+    except StopIteration as si:
+        return si.value
 
 
 def awaitable(syncfunc):
@@ -266,7 +305,6 @@ def wrap_with_tryexcept(func, *args, **kwargs):
     async def wrapped_with_tryexcept():
         try:
             nonlocal args, kwargs
-            # print("wrapping with try except", func_str(func))
             return await func(*args, **kwargs)
         except Exception as e:
 
@@ -332,7 +370,7 @@ def search_relevant_peers(peer_list, search_string):
 _AddressFamily = Annotated[AddressFamily, 'v4 or v6 family']
 _SockType = Annotated[socket.SOCK_STREAM | socket.SOCK_DGRAM, 'STREAM OR UDP']
 _IpProto = Annotated[IPPROTO_TCP | IPPROTO_UDP, "tcp or udp protocol"]
-_CannonName = Annotated[str, 'cannonical name']
+_CannonName = Annotated[str, 'canonical name']
 _SockAddr = Annotated[tuple[str, int] | tuple[str, int, int, int], "address tuple[2] if v4 tuple[4] if v6"]
 
 
@@ -383,7 +421,7 @@ class NotInUse:
     def __init__(self, function):
         """Decorator class to mark functions as not in use or not fully tested.
 
-        This class is used to mark functions that are not currently in use or haven't been fully tested.
+        Used to mark functions that are not currently in use or haven't been fully tested.
         By marking a function with this class, it prevents the call to the function unless explicitly allowed by the user.
 
         Args:

@@ -3,20 +3,23 @@ All the stuff related to kademlia goes here
 """
 
 import asyncio
-from asyncio import CancelledError
+import pickle
+from pathlib import Path
 from typing import override
 
 import kademlia.node
 from kademlia import crawling, network, node, protocol, routing
 from kademlia.crawling import NodeSpiderCrawl
-from kademlia.protocol import log
+from kademlia.protocol import log as _logger
 from rpcudp.protocol import RPCProtocol
 
 from src.avails import RemotePeer, const, use
 from src.avails.bases import BaseDispatcher
 from src.avails.events import RequestEvent
-from src.core import Dock, get_this_remote_peer, peers
-from src.core.peers import Storage
+from src.conduit import webpage
+from src.core import peers
+from src.core.app import AppType, ReadOnlyAppType
+from src.core.peerstore import Storage
 from src.transfers import REQUESTS_HEADERS
 from src.transfers.transports import KademliaTransport
 
@@ -85,15 +88,15 @@ class RPCReceiver(RPCProtocol):
 
     def rpc_store(self, sender, sender_peer, key, value):
         self._check_in(sender_peer)
-        log.debug("got a store request from %s, storing '%s'='%s'",
-                  sender, key.hex(), value)
+        _logger.debug("got a store request from %s, storing '%s'='%s'",
+                      sender, key.hex(), value)
         self.storage[key] = value
         return True
 
     def rpc_find_node(self, sender, sender_peer, key):
         source = self._check_in(sender_peer)
-        log.info("finding neighbors of %i in local table",
-                 source.long_id)
+        _logger.info("finding neighbors of %i in local table",
+                     source.long_id)
         peer = RemotePeer(key)
         neighbors = self.router.find_neighbors(peer, exclude=source)
         return list(map(tuple, neighbors))
@@ -121,15 +124,16 @@ class RPCReceiver(RPCProtocol):
 
     def rpc_search_peers(self, sender, caller_peer, search_string):
         self._check_in(caller_peer)
-        relevant_peers = use.search_relevant_peers(Dock.peer_list, search_string)
+        relevant_peers = use.search_relevant_peers(self.peer_list, search_string)
         return list(map(bytes, relevant_peers))
 
 
 class KadProtocol(RPCCaller, RPCReceiver, protocol.KademliaProtocol):
-    def __init__(self, source_node, storage, ksize):
+    def __init__(self, app_ctx, source_node, storage, ksize):
         super().__init__(source_node, storage, ksize)
-        self.router = AnotherRoutingTable(self, ksize, source_node)
+        self.router = AnotherRoutingTable(app_ctx, self, ksize, source_node)
         self.storage = storage
+        self.peer_list = app_ctx.peer_list
 
     def _check_in(self, peer):
         s = RemotePeer.load_from(peer)
@@ -158,40 +162,55 @@ class KadProtocol(RPCCaller, RPCReceiver, protocol.KademliaProtocol):
 
 
 class AnotherRoutingTable(routing.RoutingTable):
+    def __init__(self, app_ctx, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._app_ctx: AppType = app_ctx
+
     @override
     def add_contact(self, peer: RemotePeer):
         super().add_contact(peer)
-        peers.new_peer(peer)
+        self._app_ctx.peer_list.add_peer(peer)
+        use.sync(webpage.update_peer(peer))
 
     @override
     def remove_contact(self, peer: RemotePeer):
         super().remove_contact(peer)
-        peers.remove_peer(peer)
+        peers.remove_peer(self._app_ctx, peer)
 
 
 class PeerServer(network.Server):
     protocol_class = KadProtocol
 
-    def __init__(self, ksize=20, alpha=3, peer_id=None, storage=None):
+    def __init__(self, app_ctx, state_dump_file=None, ksize=20, alpha=3, peer_id=None, storage=None):
         super().__init__(ksize, alpha, peer_id, storage)
         self.add_this_peer_task = None
         self._transport = None
         self.stopping = False
+        self.app_ctx = app_ctx
+        self.state_dump_file = state_dump_file
 
     @override
     async def bootstrap_node(self, addr):
         result = await self.protocol.ping(addr, bytes(self.node))
         return RemotePeer.load_from(result[1]) if result[0] else None
 
+    @override
+    def _create_protocol(self):
+        return self.protocol_class(self.app_ctx, self.node, self.storage, self.ksize)
+
     def start(self):
         self.protocol = self._create_protocol()
         self.refresh_table()
 
     async def get_list_of_nodes(self, list_key):
+        """Get Peers registered in ``list_key`` list from network
+        recommended to use `PeerListGetter` for this action, this is a low level function
+        """
+
         peer = RemotePeer(list_key)
         nearest = self.protocol.router.find_neighbors(peer)
         if not nearest:
-            log.warning("There are no known neighbors to get key %s", list_key)
+            _logger.warning("There are no known neighbors to get key %s", list_key)
             return None
         peer_list_getter = peers.PeerListGetter(self.protocol, node, nearest,
                                                 self.ksize, self.alpha)
@@ -214,7 +233,7 @@ class PeerServer(network.Server):
 
     async def add_this_peer_to_lists(self):
         if self.add_this_peer_task:
-            log.warning(f"{self.add_this_peer_task=}, already found task object not entering function body")
+            _logger.warning(f"{self.add_this_peer_task=}, already found task object not entering function body")
             # this function only gets called once in the entire application lifetime
             return
 
@@ -227,16 +246,17 @@ class PeerServer(network.Server):
             if self.stopping:
                 break
             if await self.store_nodes_in_list(closest_list_id, [self.node]):
-                log.debug(f"added this peer object in list_id={closest_list_id}")  # debug
+                _logger.debug(f"added this peer object in list_id={closest_list_id}")  # debug
                 break
 
         # entering passive mode
-        log.info("entering passive mode for adding this peer to lists")
+        _logger.info("entering passive mode for adding this peer to lists")
 
         while not self.stopping:
             await asyncio.sleep(const.PERIODIC_TIMEOUT_TO_ADD_THIS_REMOTE_PEER_TO_LISTS)
+            await self.app_ctx.in_network.wait()
             if not await self.store_nodes_in_list(closest_list_id, [self.node]):
-                log.error("failed adding this peer object to lists")
+                _logger.error("failed adding this peer object to lists")
 
     async def store_nodes_in_list(self, list_key_id, peer_objs):
         list_key = RemotePeer(list_key_id)
@@ -244,14 +264,14 @@ class PeerServer(network.Server):
 
         nearest = self.protocol.router.find_neighbors(list_key)
         if not nearest:
-            # log.info("There are no known neighbors to set key %s",
+            # _logger.info("There are no known neighbors to set key %s",
             #          list_key_id.hex())
             return False
         spider = crawling.NodeSpiderCrawl(self.protocol, list_key, nearest,
                                           self.ksize, self.alpha)
         relevant_peers = await spider.find()
 
-        # log.info("setting '%s' on %s", dkey.hex(), list(map(str, relevant_peers)))
+        # _logger.info("setting '%s' on %s", dkey.hex(), list(map(str, relevant_peers)))
         distances = [n.distance_to(list_key) for n in relevant_peers]
         if not distances:
             return False
@@ -305,19 +325,38 @@ class PeerServer(network.Server):
 
         return False
 
+    async def load_state(self):  # noqa
+        def _file_read_helper():
+            with open(self.state_dump_file, 'rb') as file:
+                _data = pickle.load(file)
+            return _data
+
+        _logger.info("Loading state from %s", self.state_dump_file)
+        data = await asyncio.to_thread(_file_read_helper)
+
+        if data['neighbors']:
+            await self.bootstrap(data['neighbors'])
+
     async def __aenter__(self):
         self.stopping = False
+        if self.state_dump_file:
+            await self.load_state()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         self.stopping = True
+        await asyncio.sleep(0)
+
         if self.add_this_peer_task:
-            self.add_this_peer_task.cancel()
-            try:
-                await self.add_this_peer_task
-            except CancelledError:
-                # no need reraise again
-                pass
+            await use.safe_cancel_task(self.add_this_peer_task)
+
+        if self.state_dump_file:
+            await asyncio.to_thread(self.save_state, self.state_dump_file)
+
+    @property
+    def peer_list(self):
+        """Shortcut access to application's active peer list"""
+        return self.app_ctx.peer_list
 
 
 def register_into_dispatcher(server, dispatcher: BaseDispatcher):
@@ -325,9 +364,13 @@ def register_into_dispatcher(server, dispatcher: BaseDispatcher):
     dispatcher.register_handler(REQUESTS_HEADERS.KADEMLIA, handler)
 
 
-def prepare_kad_server(req_transport):
-    kad_server = PeerServer(storage=Storage())
-    kad_server.node = get_this_remote_peer()
+def prepare_kad_server(req_transport, app_ctx: ReadOnlyAppType):
+    kad_server = PeerServer(
+        app_ctx=app_ctx,
+        state_dump_file=Path(const.PATH_CONFIG, const.KAD_SERVER_STATE_FILE_NAME),
+        storage=Storage()
+    )
+    kad_server.node = app_ctx.this_remote_peer
     kad_server.start()
     kad_server.transport = KademliaTransport(req_transport)
     return kad_server

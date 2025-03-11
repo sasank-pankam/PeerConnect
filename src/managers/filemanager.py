@@ -6,13 +6,15 @@ from contextlib import AsyncExitStack, aclosing, asynccontextmanager
 from pathlib import Path
 
 from src.avails import OTMInformResponse, OTMSession, RemotePeer, TransfersBookKeeper, Wire, WireData, connect, \
-    const
+    const, get_dialog_handler
 from src.avails.events import ConnectionEvent
 from src.avails.exceptions import TransferIncomplete, TransferRejected
-from src.core import Dock, get_this_remote_peer, peers
+from src.conduit import webpage
+from src.core import peers
+from src.core.app import ReadOnlyAppType, provide_app_ctx
+from src.core.connector import Connector
 from src.transfers import HEADERS, TransferState, files, otm
 from src.transfers.status import StatusMixIn
-from src.webpage_handlers import webpage
 
 transfers_book = TransfersBookKeeper()
 
@@ -20,14 +22,15 @@ _logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def send_files_to_peer(peer_id, selected_files):
+@provide_app_ctx
+async def send_files_to_peer(peer_id, selected_files, *, app_ctx=None):
     """Sends provided files to peer with ``peer_id``
     Gets peer information from peers module
 
     Args:
         peer_id(str): id of peer to send file to
         selected_files(list[str | Path]): list of file paths
-
+        app_ctx(ReadOnlyAppType): application context to get this remote peer
     Yields:
         files.Sender object
     """
@@ -37,11 +40,12 @@ async def send_files_to_peer(peer_id, selected_files):
         file_sender_handle.attach_files(selected_files)
         return
 
-    file_sender, status_updater = await _send_setup(peer_id, selected_files)
+    peer = await peers.get_remote_peer(peer_id)
+    file_sender, status_updater = await _send_setup(peer, selected_files)
     yield_decision = status_updater.should_yield
 
     try:
-        async with _handle_sending(file_sender, peer_id) as sender:
+        async with _sender_helper(file_sender, peer_id, this_peer_id=app_ctx.this_peer_id) as sender:
             yield file_sender
 
             async for _ in sender:
@@ -57,25 +61,27 @@ async def send_files_to_peer(peer_id, selected_files):
         status_updater.close()
 
 
-async def _send_setup(peer_id, selected_files):
+async def _send_setup(peer, selected_files):
     status_updater = StatusMixIn(const.TRANSFER_STATUS_UPDATE_FREQ)
     file_sender = files.Sender(
-        Dock.peer_list.get_peer(peer_id),
+        peer,
         transfers_book.get_new_id(),
         selected_files,
         status_updater,
     )
-    transfers_book.add_to_current(peer_id=peer_id, transfer_handle=file_sender)
+    transfers_book.add_to_current(peer_id=peer.peer_id, transfer_handle=file_sender)
     return file_sender, status_updater
 
 
 @asynccontextmanager
-async def _handle_sending(file_sender, peer_id):
+async def _sender_helper(file_sender, peer_id, *, this_peer_id):
     async with AsyncExitStack() as stack:
         try:
             may_be_confirmed = True
-            await stack.enter_async_context(prepare_connection(file_sender))
-            accepted = await asyncio.wait_for(file_sender.recv_func(1), const.DEFAULT_TRANSFER_TIMEOUT)
+            connection = await stack.enter_async_context(prepare_connection(file_sender, this_peer_id))
+            file_sender.connection_made(connection)
+            accepted = await asyncio.wait_for(connection.recv(1), const.DEFAULT_TRANSFER_TIMEOUT)
+            print(f"{accepted=}")  # debug
             if accepted == b'\x00':
                 may_be_confirmed = False
         except OSError as oe:  # unable to connect
@@ -93,38 +99,31 @@ async def _handle_sending(file_sender, peer_id):
 
 
 @asynccontextmanager
-async def prepare_connection(sender_handle):
+async def prepare_connection(sender_handle, this_peer_id):
     _logger.debug(f"changing state to connection")  # debug
     sender_handle.state = TransferState.CONNECTING
-    try:
-        with await connect.connect_to_peer(
-                sender_handle.peer_obj,
-                connect.CONN_URI,
-                timeout=2,
-                retries=2,
-        ) as connection:
-            connection.setsockopt(socket.SOL_SOCKET, socket.TCP_NODELAY, 1)
-            handshake = WireData(
-                header=HEADERS.CMD_FILE_CONN,
-                version=sender_handle.version,
-                file_id=sender_handle.id,
-                peer_id=get_this_remote_peer().peer_id,
-            )
 
-            await Wire.send_async(connection, bytes(handshake))
-            _logger.debug("authorization header sent for file connection", extra={'id': sender_handle.id})
+    connector = Connector()
+    async with connector.connect(sender_handle.peer_obj) as connection:
+        connection.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_NODELAY, 1)
+        handshake = WireData(
+            header=HEADERS.CMD_FILE_CONN,
+            version=sender_handle.version,
+            file_id=sender_handle.id,
+            peer_id=this_peer_id,
+        )
+        _logger.debug(f"authorization header sent for file connection {sender_handle.id}")
+        await Wire.send_msg(connection, handshake)
 
-            send_func = connect.Sender(connection)
-            recv_func = connect.Receiver(connection)
-            sender_handle.connection_made(send_func, recv_func)
-            _logger.debug(f"connection established")
-            yield
-    except OSError as oops:
-        if not sender_handle.state == TransferState.PAUSED:
-            _logger.warning(f"reverting state to PREPARING, failed to connect to peer",
-                            exc_info=oops)
-            sender_handle.state = TransferState.PREPARING
-        raise
+        _logger.info(f"connection established")
+        try:
+            yield connection
+        except OSError as oops:
+            if not sender_handle.state == TransferState.PAUSED:
+                _logger.warning(f"reverting state to PREPARING, failed to connect to peer",
+                                exc_info=oops)
+                sender_handle.state = TransferState.PREPARING
+            raise
 
 
 async def _send_finalize(file_sender, peer_id):
@@ -135,38 +134,120 @@ async def _send_finalize(file_sender, peer_id):
 
 
 @asynccontextmanager
-async def file_receiver(file_req: WireData, connection, status_updater):
+async def send_big_file():
+    ...
+
+
+@asynccontextmanager
+async def file_receiver(file_req: WireData, connection: connect.Connection, status_updater):
     """
     Just a wrapper which does bookkeeping for FileReceiver object
     """
 
     peer_id = file_req.peer_id
     version = file_req.version
-    peer_obj = await peers.get_remote_peer_at_every_cost(peer_id)
+    peer_obj = await peers.get_remote_peer(peer_id)
     file_handle = files.Receiver(
         peer_obj,
         file_req['file_id'],
         const.PATH_DOWNLOAD,
         status_updater
     )
-    sender = connect.Sender(connection)
-    receiver = connect.Receiver(connection)
 
-    file_handle.connection_made(sender, receiver)
+    file_handle.connection_made(connection)
 
     transfers_book.add_to_current(file_req.id, file_handle)
+    try:
+        yield file_handle
+    finally:
+        if file_handle.state == TransferState.COMPLETED:
+            transfers_book.add_to_completed(file_req.id, file_handle)
+        if file_handle.state == TransferState.PAUSED:
+            transfers_book.add_to_continued(file_req.id, file_handle)
 
-    yield file_handle
 
-    if file_handle.state == TransferState.COMPLETED:
-        transfers_book.add_to_completed(file_req.id, file_handle)
-    if file_handle.state == TransferState.PAUSED:
-        transfers_book.add_to_continued(file_req.id, file_handle)
+def FileConnectionHandler(app_ctx):
+    async def handler(event: ConnectionEvent):
+        file_req = event.handshake
+        _logger.info(f"new file connection arrived transfer_id={file_req['file_id']}")
+        if transfer_handle := transfers_book.check_running(file_req['file_id']):
+            # if we have a transfer running with same id, just send that connection into running handle
+            transfer_handle.connection_made(event.connection)
+            return
+
+        what = await webpage.get_transfer_ok(app_ctx.current_profile, event.handshake.peer_id)
+        if not what:
+            await event.connection.send(
+                b"\x00"
+            )
+            return
+        await event.connection.send(b"\x01")
+
+        _logger.debug(f"scheduling file transfer request {file_req!r}")
+
+        try:
+            async with AsyncExitStack() as exit_stack:
+                status_updater = StatusMixIn(const.TRANSFER_STATUS_UPDATE_FREQ)
+                receiver_handle = await exit_stack.enter_async_context(file_receiver(
+                    file_req,
+                    event.connection,
+                    status_updater,
+                ))
+                receiver = await exit_stack.enter_async_context(aclosing(receiver_handle.recv_files()))
+
+                yield_decision = status_updater.should_yield
+                async for _ in receiver:
+                    if yield_decision():
+                        await webpage.transfer_update(
+                            file_req.peer_id,
+                            receiver_handle.id,
+                            receiver_handle.current_file
+                        )
+
+            status_updater.close()
+        except TransferIncomplete as e:
+            await webpage.transfer_incomplete(
+                file_req.peer_id,
+                receiver_handle.id,
+                receiver_handle.current_file,
+                detail=e
+            )
+
+    return handler
 
 
-def start_new_otm_file_transfer(files_list: list[Path], peers: list[RemotePeer]):
+def OTMConnectionHandler():
+    async def handler(event: ConnectionEvent):
+        """
+        This is the final function call related to an otm session, all other rpc' s from now are made
+        internally from/to otm session relay
+        """
+        link_data = event.handshake
+        _logger.info(f"updating otm connection from{event.connection.socket.getpeername()}")
+        session_id = link_data['session_id']
+        otm_relay = transfers_book.get_scheduled(session_id)
+        if otm_relay:
+            await otm_relay.otm_add_stream_link(event.connection, link_data)
+        else:
+            _logger.error(f"otm session not found with id={session_id}")
+
+    return handler
+
+
+async def open_file_selector():
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, get_dialog_handler().open_file_dialog_window)  # noqa
+    input(f"aksfjsdifasudbvajeoviefbvdsofsdifneoigiaergoaeslgnk{result}")
+    if any(result) and result[0] == '.':
+        return []
+    return result
+
+
+@provide_app_ctx
+def start_new_otm_file_transfer(files_list: list[Path], peers: list[RemotePeer], *, app_ctx=None):
     file_sender = otm.FilesSender(
         file_list=files_list,
+        this_peer=app_ctx.this_remote_peer,
         peers=peers,
         timeout=3,
     )
@@ -174,7 +255,8 @@ def start_new_otm_file_transfer(files_list: list[Path], peers: list[RemotePeer])
     return file_sender
 
 
-def new_otm_request_arrived(req_data: WireData, addr):
+@provide_app_ctx
+def new_otm_request_arrived(req_data: WireData, _, *, app_ctx):
     session = OTMSession(
         originate_id=req_data.id,
         session_id=req_data['session_id'],
@@ -185,10 +267,11 @@ def new_otm_request_arrived(req_data: WireData, addr):
         file_count=req_data['file_count'],
         chunk_size=req_data['chunk_size'],
     )
-    this_peer = get_this_remote_peer()
+    this_peer = app_ctx.this_remote_peer
     passive_endpoint_address = (this_peer.ip, connect.get_free_port())
     receiver = otm.FilesReceiver(
         session,
+        app_ctx.this_remote_peer,
         passive_endpoint_address,
         this_peer.uri
     )
@@ -202,66 +285,3 @@ def new_otm_request_arrived(req_data: WireData, addr):
     )
     _logger.info(f"replying otm req with passive={reply.passive_addr} active={reply.active_addr}")
     return bytes(reply)
-
-
-def FileConnectionHandler():
-    async def handler(event: ConnectionEvent):
-        with event.transport.socket:
-            file_req = event.handshake
-            _logger.info("new file connection arrived", extra={'id': file_req['file_id']})
-
-            # if not await webpage.get_transfer_ok(event.handshake.peer_id):  # :todo: ask webpage
-            #     await event.transport.send(b'\x00')
-            #     return
-
-            await event.transport.socket.asendall(b'\x01')
-
-            _logger.debug(f"scheduling file transfer request {file_req!r}")
-
-            try:
-                async with AsyncExitStack() as exit_stack:
-                    status_updater = StatusMixIn(const.TRANSFER_STATUS_UPDATE_FREQ)
-                    receiver_handle = await exit_stack.enter_async_context(file_receiver(
-                        file_req,
-                        event.transport.socket,
-                        status_updater,
-                    ))
-                    receiver = await exit_stack.enter_async_context(aclosing(receiver_handle.recv_files()))
-                    yield_decision = status_updater.should_yield
-                    async for _ in receiver:
-                        if yield_decision():
-                            await webpage.transfer_update(
-                                file_req.peer_id,
-                                receiver_handle.id,
-                                receiver_handle.current_file
-                            )
-                status_updater.close()
-            except TransferIncomplete as e:
-                await webpage.transfer_incomplete(
-                    file_req.peer_id,
-                    receiver_handle.id,
-                    receiver_handle.current_file,
-                    detail=e
-                )
-
-    return handler
-
-
-def OTMConnectionHandler():
-    async def handler(event: ConnectionEvent):
-        """
-        This is the final function call related to an otm session, all other rpc' s from now are made
-        internally from/to otm session relay
-        """
-        connection = event.transport.socket
-        link_data = event.handshake
-        _logger.info("updating otm connection", extra={'addr': connection.getpeername()})
-        session_id = link_data['session_id']
-        otm_relay = transfers_book.get_scheduled(session_id)
-        if otm_relay:
-            await otm_relay.otm_add_stream_link(connection, link_data)
-        else:
-            _logger.error(f"otm session not found with id={session_id}")
-            _logger.error(f"ignoring request from {connection.getpeername()}")
-
-    return handler

@@ -1,65 +1,40 @@
-from typing import Callable, Coroutine
-
-from src.avails import BaseDispatcher, GossipMessage
+from src.avails import BaseDispatcher, GossipMessage, const
 from src.avails.events import GossipEvent
 from src.avails.mixins import QueueMixIn
-from src.core import Dock, get_gossip
-from src.core.peers import get_search_handler
-from src.transfers import GOSSIP, GossipTransport, REQUESTS_HEADERS, \
+from src.core import search
+from src.core.app import AppType, ReadOnlyAppType
+from src.transfers import GOSSIP_HEADER, GossipTransport, REQUESTS_HEADERS, \
     RumorMongerProtocol, SimpleRumorMessageList
 
 
-class GlobalGossipRumorMessageList(SimpleRumorMessageList):  # inspired from java
-    @staticmethod
-    def _get_list_of_peers():
-        return set(Dock.peer_list.keys())
+class GlobalGossipRumorMessageList(SimpleRumorMessageList):
+    __slots__ = "global_peer_list",
+
+    def __init__(self, global_peer_list, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.global_peer_list = global_peer_list
+
+    def _get_list_of_peers(self):
+        return set(self.global_peer_list.keys())
 
 
 class GlobalRumorMonger(RumorMongerProtocol):
-    def __init__(self, transport):
-        super().__init__(transport, GlobalGossipRumorMessageList)
+    def __init__(self, transport, global_peer_list):
+        super().__init__(transport, global_peer_list,
+                         GlobalGossipRumorMessageList(global_peer_list, const.NODE_POV_GOSSIP_TTL))
 
 
-def GlobalGossipMessageHandler(global_gossiper):
+def GlobalGossipMessageHandler(app_ctx: ReadOnlyAppType):
+    gossip_handler = app_ctx.gossip.gossiper
+
     async def handle(event: GossipEvent):
         print("[GOSSIP] new message arrived", event.message, "from", event.from_addr)
-        return global_gossiper.message_arrived(*event)
-
-    return handle
-
-
-def GossipSearchReqHandler(searcher, transport, gossiper: RumorMongerProtocol,
-                           gossip_handler: GlobalGossipMessageHandler):
-    async def handle(event: GossipEvent):
-        if not gossiper.is_seen(event.message):
-            await gossip_handler(event)
-        if reply := searcher.request_arrived(*event):
-            return transport.sendto(reply, event.from_addr)
-
-    return handle
-
-
-def GossipSearchReplyHandler(searcher):
-    async def handle(event: GossipEvent):
-        print("[GOSSIP][SEARCH] reply received:", event.message, "for", event.from_addr)
-        return searcher.reply_arrived(*event)
+        return gossip_handler.message_arrived(*event)
 
     return handle
 
 
 class GossipDispatcher(QueueMixIn, BaseDispatcher):
-    """
-        elif req_data.match_header(HEADERS.GOSSIP_CREATE_SESSION):
-            self.handle_gossip_session(req_data, addr)
-            GOSSIP.CREATE_SESSION: None,
-    """
-    __slots__ = 'registry',
-
-    def __init__(self, transport: GossipTransport, stop_flag):
-        super().__init__(transport=transport, stop_flag=stop_flag)
-        self.transport = transport
-        self.registry: dict[bytes, Callable[[GossipEvent], Coroutine[None, None, None]]] = {}
-
     async def submit(self, event):
         gossip_message = GossipMessage(event.request)
         handler = self.registry[gossip_message.header]
@@ -67,26 +42,26 @@ class GossipDispatcher(QueueMixIn, BaseDispatcher):
         await handler(g_event)
 
 
-def initiate_gossip(data_transport, req_dispatcher):
+async def initiate_gossip(data_transport, req_dispatcher, app_ctx: AppType):
     gossip_transport = GossipTransport(data_transport)
-    Dock.global_gossip = GlobalRumorMonger(gossip_transport)
+    g_dispatcher = GossipDispatcher()
 
-    g_dispatcher = GossipDispatcher(gossip_transport, Dock.finalizing.is_set)
+    app_ctx.gossip.transport = gossip_transport
+    app_ctx.gossip.gossiper = GlobalRumorMonger(gossip_transport, app_ctx.peer_list)
+    app_ctx.gossip.dispatcher = g_dispatcher
 
-    gossip_searcher = get_search_handler()
+    gossip_message_handler = GlobalGossipMessageHandler(app_ctx.read_only())
 
-    gossip_message_handler = GlobalGossipMessageHandler(Dock.global_gossip)
-    req_handler = GossipSearchReqHandler(
-        gossip_searcher,
-        gossip_transport,
-        Dock.global_gossip,
-        gossip_message_handler
+    search.register_handlers(
+        app_ctx.read_only(),
+        g_dispatcher,
+        gossip_message_handler,
+        gossip_transport
     )
-    reply_handler = GossipSearchReplyHandler(gossip_searcher)
-    g_dispatcher.register_handler(GOSSIP.MESSAGE, gossip_message_handler)
-    g_dispatcher.register_handler(GOSSIP.SEARCH_REQ, req_handler)
-    g_dispatcher.register_handler(GOSSIP.SEARCH_REPLY, reply_handler)
 
+    g_dispatcher.register_handler(GOSSIP_HEADER.MESSAGE, gossip_message_handler)
     req_dispatcher.register_handler(REQUESTS_HEADERS.GOSSIP, g_dispatcher)
-    print("joined gossip network", get_gossip())
+    await app_ctx.exit_stack.enter_async_context(g_dispatcher)
+    app_ctx.gossip.dispatcher = g_dispatcher
     return g_dispatcher
+

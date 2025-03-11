@@ -21,6 +21,9 @@ install() {
 }
 
 base_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
+
+export PYTHONPATH="$base_dir:$PYTHONPATH"
+
 venv_dir="$base_dir/venv"
 
 setup_environment() {
@@ -57,8 +60,8 @@ if [ "$lines" -ne 32 ]; then
   install
 fi
 
-cd $base_dir
-$runner main.py
+cd $base_dir || exit
+$runner src
 
 deactivate
 

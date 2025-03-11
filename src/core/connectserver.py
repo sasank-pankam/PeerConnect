@@ -6,7 +6,6 @@ import struct
 import time
 
 from src.avails import (RemotePeer, Wire, connect, const, use)
-from src.core import Dock, get_this_remote_peer
 from src.transfers import HEADERS
 
 _logger = logging.getLogger(__name__)
@@ -42,8 +41,8 @@ async def get_list_from(initiate_socket):
         return await get_initial_list(length, initiate_socket)
 
 
-async def list_error_handler():
-    req_peer = next(iter(Dock.peer_list.peers()))
+async def list_error_handler(app):
+    req_peer = next(iter(app.peer_list.peers()))
     # try:
     conn = await connect.connect_to_peer(_peer_obj=req_peer)
     # except OSError:
@@ -66,9 +65,9 @@ async def list_from_forward_control(list_owner: RemotePeer):
         await get_list_from(list_connection_socket)
 
 
-async def initiate_connection():
+async def initiate_connection(app_ctx):
     _logger.info(f"Connecting to server {const.SERVER_IP}${const.PORT_SERVER}")
-    server_connection = await setup_server_connection()
+    server_connection = await setup_server_connection(app_ctx)
     if server_connection is None:
         _logger.info("Can't connect to server")
         return False
@@ -91,7 +90,7 @@ async def initiate_connection():
         return True
 
 
-async def setup_server_connection():
+async def setup_server_connection(app_ctx):
     address = (const.SERVER_IP, const.PORT_SERVER)
     conn = None
     for i, timeout in enumerate(use.get_timeouts(0.1)):
@@ -107,7 +106,7 @@ async def setup_server_connection():
     if conn is None:
         return
     try:
-        this_peer = get_this_remote_peer()
+        this_peer = app_ctx.this_remote_peer
         await Wire.send_async(conn, bytes(this_peer))
     except (socket.error, OSError):
         conn.close()
@@ -115,16 +114,15 @@ async def setup_server_connection():
     return conn
 
 
-async def send_quit_status_to_server():
+async def send_quit_status_to_server(app_ctx):
     try:
-        get_this_remote_peer().status = 0
+        app_ctx.this_remote_peer.status = RemotePeer.OFFLINE
         sock = await connect.create_connection_async(
             (const.SERVER_IP, const.PORT_SERVER),
             timeout=const.SERVER_TIMEOUT
         )
         with sock:
-            this_peer = get_this_remote_peer()
-            await Wire.send_async(sock, bytes(this_peer))
+            await Wire.send_async(sock, bytes(app_ctx.this_remote_peer))
         _logger.info("::sent leaving status to server")
         return True
     except Exception as exp:

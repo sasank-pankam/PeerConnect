@@ -1,13 +1,15 @@
 import asyncio
-from collections import abc
+from typing import AsyncIterable, override
 
 from tqdm import tqdm
+
+from src.transfers.abc import AbstractStatusMix
 
 
 # design decision:
 # two things we can provide to transfer API
 # 1. A StatusIterator
-# 2. A StatusMixIn class that provides functionality to make yield desicions
+# 2. A StatusMixIn class that provides functionality to make yield decisions
 # 1.
 #
 #    class StatusIterator
@@ -25,14 +27,14 @@ from tqdm import tqdm
 #       * should_yield() -> bool
 #
 #   calls func: update every time some data is transferred
-#   calls func: should_yield to make a desicion whether to yield or not
+#   calls func: should_yield to make a decision whether to yield or not
 #
 #   this requires Transfer classes to work with mix in
 # --
 #   if (1) is used
 #       Then Transfer classes need not be too aware of status updates
 #       transfer classes are isolated from the status things and can focus on transferring contents
-#       preserving single responsibilty principle
+#       preserving single responsibility principle
 
 #       forcing blocking functions like `start sending or receiving` get spawned as an ``asyncio.Task``
 #       further breaking a critical exception control flow in high level handlers
@@ -48,7 +50,7 @@ from tqdm import tqdm
 #  but (1) is still used when multiple generators update a transfer status concurrently
 
 
-class StatusMixIn:
+class StatusMixIn(AbstractStatusMix):
     __slots__ = 'yield_freq', 'current_status', '_yield_iterator', 'progress_bar', 'next_yield_point'
 
     def __init__(self, yield_freq):
@@ -60,6 +62,7 @@ class StatusMixIn:
 
     def update_status(self, status):
         self.progress_bar.update(status - self.current_status)
+        # update only the increment b/w before and after
         self.current_status = status
 
     def should_yield(self):
@@ -69,6 +72,7 @@ class StatusMixIn:
         return False
 
     def status_setup(self, prefix, initial_limit, final_limit):
+        print("#" * 89, initial_limit, final_limit)
         if self.progress_bar:
             self.progress_bar.close()
 
@@ -78,7 +82,7 @@ class StatusMixIn:
             unit='B',
             unit_scale=True,
             unit_divisor=1024,
-            # total=initial_limit
+            dynamic_ncols=True
         )
         self.progress_bar.update(initial_limit)
 
@@ -99,11 +103,7 @@ class StatusMixIn:
         self.close()
 
 
-class StatusIterator(StatusMixIn, abc.AsyncIterable):
-
-    def __aiter__(self):
-        return self
-
+class StatusIterator(StatusMixIn, AsyncIterable):
     __slots__ = "_queue", "exp"
     _sentinel = object()
 
@@ -112,10 +112,14 @@ class StatusIterator(StatusMixIn, abc.AsyncIterable):
         self._queue = asyncio.Queue()
         self.exp = self._sentinel
 
+    @override
     def update_status(self, status):
         super().update_status(status)
         if self.should_yield():
             self._queue.put(self.current_status)
+
+    def __aiter__(self):
+        return self
 
     async def __anext__(self):
         item = await self._queue.get()

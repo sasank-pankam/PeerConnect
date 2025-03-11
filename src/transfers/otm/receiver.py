@@ -14,12 +14,13 @@ from src.transfers.otm.relay import OTMFilesRelay
 
 class FilesReceiver:
 
-    def __init__(self, session, passive_endpoint, active_endpoint):
+    def __init__(self, session, this_peer, passive_endpoint, active_endpoint):
         self.file_items = []
         self.session: OTMSession = session
         self.relay = OTMFilesRelay(
             self,
             session,
+            this_peer,
             passive_endpoint,
             active_endpoint,
         )

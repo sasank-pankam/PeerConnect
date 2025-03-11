@@ -2,7 +2,7 @@ import struct
 from asyncio import BaseTransport
 from typing import override
 
-from src.avails import WireData, connect, use
+from src.avails import WireData
 from src.transfers import REQUESTS_HEADERS
 
 
@@ -14,18 +14,18 @@ class RequestsTransport(BaseTransport):  # just for type hinting
     which is further used to detect and multiplex to different registered dispatchers
 
     Note:
-        no need to use this as **Wire.send_*(self.transport)**, that is only for bare sockets
+        no need to use this with **Wire.send_*(self.transport)**, that is only for bare sockets
 
     Usage:
         >>> class Subclass(RequestsTransport):
         >>>     _trigger = b'\x11'  # some code of one byte
     or:
-        >>> RequestsTransport(transport, _event_trigger_header=b'\x23')
+        >>> RequestsTransport(transport, _event_trigger_header=b'\x23')  # noqa
 
     """
 
     __slots__ = 'transport', 'trigger'
-    _trigger = b''
+    _trigger = REQUESTS_HEADERS.REQUEST
 
     def __init__(self, transport, _event_trigger_header=None):
         super().__init__()
@@ -46,7 +46,7 @@ class KademliaTransport(RequestsTransport):
     _trigger = REQUESTS_HEADERS.KADEMLIA
 
     @override
-    def sendto(self, data: bytes, addr: tuple[str, int] = None):
+    def sendto(self, data: bytes, addr: tuple[str, int] | tuple[str, int, int, int] = None):
         formatted = bytes(WireData(data=data))
         return super().sendto(formatted, addr)
 
@@ -59,20 +59,3 @@ class DiscoveryTransport(RequestsTransport):
 class GossipTransport(RequestsTransport):
     __slots__ = ()
     _trigger = REQUESTS_HEADERS.GOSSIP
-
-
-class StreamTransport:
-    __slots__ = 'socket',
-
-    def __init__(self, socket_transport: connect.Socket):
-        super().__init__()
-        self.socket = socket_transport
-
-    async def send(self, data: bytes):
-        data_size = struct.pack("!I", len(data))
-        return await self.socket.asendall(data_size + data)
-
-    async def recv(self):
-        data_size = await use.recv_int(self.socket.arecv)
-        data = await self.socket.arecv(data_size)
-        return data

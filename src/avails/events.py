@@ -1,32 +1,25 @@
-from typing import NamedTuple, TYPE_CHECKING
+from typing import NamedTuple
 
+from src.avails.connect import Addr, Connection, MsgConnection
 from src.avails.wire import GossipMessage, WireData
 
 
 class RequestEvent(NamedTuple):
     root_code: bytes
     request: WireData
-    from_addr: tuple[str, int]
+    from_addr: Addr
 
 
 class GossipEvent(NamedTuple):
     message: GossipMessage
-    from_addr: tuple[str, int]
+    from_addr: Addr
 
 
 class ConnectionEvent(NamedTuple):
-    if TYPE_CHECKING:
-        from src.transfers.transports import StreamTransport
-        transport: StreamTransport
-    else:
-        transport: None
+    connection: Connection
     handshake: WireData
 
 
-class StreamDataEvent(NamedTuple):
-    data: WireData
-    if TYPE_CHECKING:
-        from src.transfers.transports import StreamTransport
-        transport: StreamTransport
-    else:
-        transport: None
+class MessageEvent(NamedTuple):
+    msg: WireData
+    connection: MsgConnection
