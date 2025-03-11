@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     PEER_LIST = "1this is a profiles list"
     SYNC_USERS = "1sync users"
     CONNECT_USER = "1connect_peer"
+    PEER_CONNECTED = "1connected peer"
     SEND_PEER_LIST = "1send peer list"
     VERIFICATION = "1han verification"
     SET_PROFILE = "1set selected profile"

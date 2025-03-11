@@ -158,7 +158,7 @@ def get_interfaces(address_family: socket.AF_INET | socket.AF_INET6):
         res = IPAddress(
             ip=ip,
             scope_id=scope_id,
-            if_name=adapter.AdapterName,
+            if_name=str(adapter.AdapterName),
             friendly_name=adapter.FriendlyName,
         )
         if_info.append(res)

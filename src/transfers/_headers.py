@@ -26,7 +26,7 @@ class HEADERS:
     GOSSIP_TREE_GATHER = "gossip_tree_gather"
 
     OTM_FILE_TRANSFER = "one to many file transfer request"
-    OTM_UPDATE_STREAM_LINK = "otm_add_stream_link"
+    OTM_UPDATE_STREAM_LINK = b"otm_add_stream_link"
 
 
 class REQUESTS_HEADERS:
@@ -49,7 +49,7 @@ class DISCOVERY:
     NETWORK_FIND_REPLY = b"\x01"
 
 
-class GOSSIP:
+class GOSSIP_HEADER:
     __slots__ = ()
     MESSAGE = "\x00"
     SEARCH_REQ = "\x01"

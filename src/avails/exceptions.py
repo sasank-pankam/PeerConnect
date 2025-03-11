@@ -45,3 +45,8 @@ class ResourceBusy(Exception):
 
     """
     available_after: asyncio.Condition
+
+
+class RemotePeerNotFound(Exception):
+    """RemotePeer object not found any where"""
+    peer_id: str

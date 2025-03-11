@@ -159,6 +159,7 @@ def is_socket_connected(sock: Socket):
         sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_KEEPALIVE, 1)
         sock.getpeername()
         data = sock.recv(1, _socket.MSG_PEEK)
+        sock.send(b"")
         return data != b""
     except BlockingIOError:
         return True

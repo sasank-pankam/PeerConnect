@@ -1,3 +1,12 @@
+"""Get available network interfaces
+
+Provides a cross compatible way to get system's network interfaces using APIs provided by Operating Systems
+
+Common Usage:
+    get_interfaces() -> list[connect.IPAddress]
+
+"""
+
 from src.avails import const
 from ..avails.connect import IPAddress
 
@@ -16,7 +25,7 @@ def reset():
 
 def get_ip_with_ifname(if_name: str):
     for ip in _if_info:
-        if ip.if_name == if_name:
+        if str(ip.if_name) == if_name:
             return ip
     raise ValueError("No interface found with given name")
 
