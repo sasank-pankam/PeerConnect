@@ -185,7 +185,7 @@ class ProfileManager:
         interface = self.profile_data["INTERFACE"]
         try:
             ip = interface["ip"]
-            scope_id = interface["scope_id"]
+            scope_id = int(interface["scope_id"])
             if_name = interface["if_name"]
             friendly_name = interface["friendly_name"]
         except KeyError:
