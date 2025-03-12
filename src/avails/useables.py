@@ -14,12 +14,19 @@ import uuid
 from pathlib import Path
 from socket import AddressFamily, IPPROTO_TCP, IPPROTO_UDP
 from sys import _getframe  # noqa
-from typing import Annotated, Awaitable, Final
+from typing import Annotated, Awaitable, Final, Union
+
+if sys.version_info > (3,12):
+    from typing import override
+else:
+    def override(func):
+        return func        
 
 import select
 
 from src.avails import const
 
+override = override
 
 def func_str(func_name):
     return f"{func_name.__name__}()\\{os.path.relpath(func_name.__code__.co_filename)}"
@@ -368,10 +375,10 @@ def search_relevant_peers(peer_list, search_string):
 
 
 _AddressFamily = Annotated[AddressFamily, 'v4 or v6 family']
-_SockType = Annotated[socket.SOCK_STREAM | socket.SOCK_DGRAM, 'STREAM OR UDP']
-_IpProto = Annotated[IPPROTO_TCP | IPPROTO_UDP, "tcp or udp protocol"]
+_SockType = Annotated[Union[socket.SOCK_STREAM, socket.SOCK_DGRAM], 'STREAM OR UDP']
+_IpProto = Annotated[Union[IPPROTO_TCP, IPPROTO_UDP], "tcp or udp protocol"]
 _CannonName = Annotated[str, 'canonical name']
-_SockAddr = Annotated[tuple[str, int] | tuple[str, int, int, int], "address tuple[2] if v4 tuple[4] if v6"]
+_SockAddr = Annotated[Union[tuple[str, int], tuple[str, int, int, int]], "address tuple[2] if v4 tuple[4] if v6"]
 
 
 async def get_addr_info(

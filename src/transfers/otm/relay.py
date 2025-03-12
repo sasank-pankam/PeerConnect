@@ -1,10 +1,10 @@
 import asyncio
 import collections
 from contextlib import aclosing
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 from src.avails import WireData, constants as const
-from src.avails.useables import LONG_INT, recv_int
+from src.avails.useables import LONG_INT, recv_int, override
 from src.transfers import HEADERS
 from src.transfers.otm.palm_tree import PalmTreeLink, PalmTreeProtocol, PalmTreeRelay, TreeLink
 

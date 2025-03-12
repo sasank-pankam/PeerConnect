@@ -4,8 +4,8 @@ Helper functions to deal with peers in network
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
-from typing import Optional, override
+
+from typing import Optional, AsyncIterator
 
 from kademlia import crawling
 
@@ -28,7 +28,7 @@ class PeerListGetter(crawling.ValueSpiderCrawl):
     async def find(self):
         return await self._find(self.protocol.call_find_peer_list)
 
-    @override
+    @use.override
     async def _handle_found_values(self, values):
         peer = self.nearest_without_value.popleft()
         if peer:
