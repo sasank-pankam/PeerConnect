@@ -247,7 +247,7 @@ class PeerServer(network.Server):
             if self.stopping:
                 break
             if await self.store_nodes_in_list(closest_list_id, [self.node]):
-                _logger.debug(f"added this peer object in list_id={closest_list_id}")  # debug
+                _logger.debug(f"added this peer object in list_id={closest_list_id}")
                 break
 
         # entering passive mode

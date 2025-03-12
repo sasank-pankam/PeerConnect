@@ -161,7 +161,7 @@ def async_input(helper_str=""):
 def open_file(content):
     if platform.system() == "Windows":
         powershell_script = f"""
-        $file = "{content}"
+        $file = '{content}'
         Invoke-Item $file
         """
         result = subprocess.run(["powershell.exe", "-Command", powershell_script], stdout=subprocess.PIPE, text=True)
@@ -319,7 +319,7 @@ def wrap_with_tryexcept(func, *args, **kwargs):
             )
             # Print the filtered traceback
             for frame in filtered_tb:
-                print(f"  File \"{frame.filename}\", line {frame.lineno}, in {frame.name}")
+                print(f"  File \'{frame.filename}\', line {frame.lineno}, in {frame.name}")
                 if frame.line:
                     print(f"    {frame.line}")
             print(COLOR_RESET)

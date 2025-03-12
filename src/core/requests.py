@@ -164,12 +164,11 @@ class RequestsEndPoint(asyncio.DatagramProtocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        _logger.info(f"started requests endpoint at {transport.get_extra_info("socket")}")
+        _logger.info(f"started requests endpoint at {transport.get_extra_info('socket')}")
 
     def datagram_received(self, actual_data, addr):
         code, stripped_data = actual_data[:1], actual_data[1:]
         try:
-            print(f"{code=}", stripped_data)  # debug
             req_data = unpack_datagram(stripped_data)
         except InvalidPacket as ip:
             _logger.info(f"error:", exc_info=ip)

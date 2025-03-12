@@ -96,9 +96,9 @@ def initiate(states, app):
     except KeyboardInterrupt:
         if const.debug:
             traceback.print_exc()
-            print_str = f"{"-" * 80}\n" \
+            print_str = f"{'-' * 80}\n" \
                         f"## PRINTING TRACEBACK, {const.debug=}\n" \
-                        f"{"-" * 80}\n" \
+                        f"{'-' * 80}\n" \
                         f"clean exit completed within {time.perf_counter() - cancellation_started:.6f}s\n"
             print(print_str)
 

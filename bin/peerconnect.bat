@@ -48,15 +48,15 @@ if not exist "%venv_dir%" (
         echo Failed to create virtual environment
         exit /b 1
     )
-)
-else (
+) else (
     echo Found an environment, skipping creation 
 )
 
 call "%venv_dir%\Scripts\activate.bat"
 echo Installing dependencies...
+echo Upgrading pip...
 python -m pip install --upgrade pip --quiet
-python -m pip install -r "%req_file%" --quiet || (
+python -m pip install -r "%req_file%" || (
     echo Failed to install requirements
     exit /b 1
 )
@@ -71,13 +71,14 @@ echo Setup completed successfully. Created verification flag.
 call "%venv_dir%\Scripts\activate.bat" && (
     cd /d "%base_dir%"
     python -m "%app_module%"
-    deactivate
+    call "%venv_dir%\Scripts\deactivate"
 )
 exit /b 0
 
 :: Cleanup
 :cleanup
-deactivate
+call "%venv_dir%\Scripts\deactivate"
+
 echo.
 set /p "clear=Clear screen? [y/N]: "
 if /i "!clear!"=="y" cls

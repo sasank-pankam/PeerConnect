@@ -130,7 +130,7 @@ class ProfileManager:
 
     @classmethod
     async def __remove_profile_from_main_config(cls, profile_key):
-        cls.main_config.remove_option("USER_PROFILES", profile_key)  # debug
+        cls.main_config.remove_option("USER_PROFILES", profile_key)
         # await write_config(cls._main_config, const.PATH_CONFIG_FILE)
 
         # these writes get updated when application is finalizing
@@ -268,7 +268,7 @@ async def load_profiles_to_program(main_config):
         except LookupError:
             await ProfileManager.delete_profile(profile_id)
 
-    _logger.debug(f"loaded profiles: \n{"\n".join(str(x) for x in ProfileManager.PROFILE_LIST)}")
+    _logger.debug(f"loaded profiles: \n{'\n'.join(str(x) for x in ProfileManager.PROFILE_LIST)}")
 
 
 async def refresh_profile_list():

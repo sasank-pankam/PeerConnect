@@ -545,7 +545,7 @@ class PalmTreeRelay(asyncio.DatagramProtocol):
             **kwargs: Additional print options.
         """
         return print(
-            f"[:]{use.COLORS[4]}[{self.session.session_id}][:] {" ".join(str(x) for x in string)}{use.COLOR_RESET}",
+            f"[:]{use.COLORS[4]}[{self.session.session_id}][:] {' '.join(str(x) for x in string)}{use.COLOR_RESET}",
             **kwargs,
         )
 
