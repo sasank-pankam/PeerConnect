@@ -24,7 +24,7 @@ base_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 
 export PYTHONPATH="$base_dir:$PYTHONPATH"
 
-venv_dir="$base_dir/venv"
+venv_dir="$base_dir/.venv"
 
 setup_environment() {
     echo "Setting up..."
@@ -63,7 +63,7 @@ fi
 cd $base_dir || exit
 $runner src
 
-deactivate
+$venv_dir/bin/deactivate
 
 read -p -r "Clear screen before setup? (y/n): " CLEAR_SCREEN
 

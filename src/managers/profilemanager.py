@@ -268,7 +268,9 @@ async def load_profiles_to_program(main_config):
         except LookupError:
             await ProfileManager.delete_profile(profile_id)
 
-    _logger.debug(f"loaded profiles: \n{'\n'.join(str(x) for x in ProfileManager.PROFILE_LIST)}")
+    t = '\n'.join(str(x) for x in ProfileManager.PROFILE_LIST)
+
+    _logger.debug(f"loaded profiles: {t} \n")
 
 
 async def refresh_profile_list():
