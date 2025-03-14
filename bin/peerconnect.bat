@@ -53,6 +53,7 @@ if not exist "%venv_dir%" (
 )
 
 call "%venv_dir%\Scripts\activate.bat"
+:: TODO: fails if not Scripts dir found in venv
 echo Installing dependencies...
 echo Upgrading pip...
 python -m pip install --upgrade pip --quiet

@@ -16,7 +16,7 @@ def get_interfaces(
     try:
         libc = ctypes.CDLL("libc.so.6")
     except OSError:
-        libc = ctypes.CDLL("libc.dylib")
+        libc = ctypes.CDLL("libc.dylib")  # TODO: fix on mac, not working
 
     # Define the basic sockaddr structure
     class sockaddr(ctypes.Structure):
