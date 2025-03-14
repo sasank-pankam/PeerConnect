@@ -4,8 +4,7 @@ Helper functions to deal with peers in network
 
 import asyncio
 import logging
-
-from typing import Optional, AsyncIterator
+from typing import AsyncIterator, Optional
 
 from kademlia import crawling
 
@@ -128,7 +127,7 @@ async def get_remote_peer(peer_id, *, app_ctx=None) -> Optional[RemotePeer]:
 
 def remove_peer(app_ctx, peer):
     """
-    Does Not directly remove peer
+    Does not directly remove peer
     Spawns a Task that tries to check connectivity status of peer
     If peer is reachable then it is not removed
     else peer is marked as offline

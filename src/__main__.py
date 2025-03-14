@@ -1,15 +1,12 @@
 import os
-import sys
 import time
 import traceback
 from asyncio import CancelledError
 
-from src.core.app import App, AppType
-
 if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-    sys.path.append(os.getcwd())  # TODO: make this an environment variable
 
+from src.core.app import App, AppType
 from src.avails import const
 from src.conduit import pagehandle
 from src.configurations import bootup, configure

@@ -1,11 +1,11 @@
 import asyncio
-from functools import partial
 import json
 import logging
 import logging.config
 import queue
-from pathlib import Path
 import sys
+from functools import partial
+from pathlib import Path
 
 from src.avails import const
 from src.core.app import AppType
@@ -55,7 +55,7 @@ async def _py312_initiate(app: AppType):
     app.exit_stack.callback(partial(_log_exit, queue_handlers))
 
 
-async def _py311_initiate(app: AppType):
+async def _py311_initiate(_: AppType):
     log_file_311 = const.PATH_LOG_CONFIG.with_stem(
         const.PATH_LOG_CONFIG.stem + "311")
     log_config = await asyncio.to_thread(_loader, log_file_311)

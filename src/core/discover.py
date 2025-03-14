@@ -35,7 +35,6 @@ Discovery State Machine
 
 import asyncio
 import logging
-import traceback
 from typing import TYPE_CHECKING
 
 from src.avails import WireData, const, use
@@ -118,10 +117,8 @@ class DiscoveryDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
         _logger.debug(f"dispatching request {handle}")
         try:
             await handle(event)
-        except Exception:
-            if const.debug:
-                traceback.print_exc()
-            raise
+        except Exception as exp:
+            _logger.error(f"{handle} failed with :", exc_info=exp)
 
 
 async def send_discovery_requests(multicast_addr, app_ctx):

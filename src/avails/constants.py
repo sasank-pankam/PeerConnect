@@ -23,8 +23,8 @@ BROADCAST_IP = "255.255.255.255"
 _BIND_IP_V4 = "0.0.0.0"
 _BIND_IP_V6 = "::"
 BIND_IP = _BIND_IP_V4
-WEBSOCKET_BIND_IP = "localhost"
-# WEBSOCKET_BIND_IP = "172.16.192.253"
+# WEBSOCKET_BIND_IP = "localhost"
+WEBSOCKET_BIND_IP = "172.16.192.253"
 
 IS_WINDOWS = platform == "win32"
 IS_DARWIN = platform == "darwin"
@@ -64,7 +64,7 @@ USING_IP_V4 = True
 USING_IP_V6 = False
 
 FILE_ERROR_EXT = ".pc-unconfirmedownload"
-debug = False
+debug = True
 
 PROTOCOL = None
 
