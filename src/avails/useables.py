@@ -16,17 +16,18 @@ from socket import AddressFamily, IPPROTO_TCP, IPPROTO_UDP
 from sys import _getframe  # noqa
 from typing import Annotated, Awaitable, Final, Union
 
-if sys.version_info > (3,12):
-    from typing import override
-else:
-    def override(func):
-        return func        
-
 import select
+
+if sys.version_info > (3, 12):
+    from typing import override as _override
+else:
+    def _override(func):
+        return func  # noqa
 
 from src.avails import const
 
-override = override
+override = _override
+
 
 def func_str(func_name):
     return f"{func_name.__name__}()\\{os.path.relpath(func_name.__code__.co_filename)}"
@@ -43,10 +44,16 @@ SHORT_INT = 4
 LONG_INT = 8
 
 
-async def safe_cancel_task(task):
+async def safe_cancel_task(task: asyncio.Task):
     """Cancels task and waits until it returns
 
-    Handles the case when the parent task gets cancelled and catching that cancelled error misjudges event loop
+    * Handles the case when the parent task gets cancelled and catching that cancelled error misjudges event loop
+
+    * If the task containing this function call gets cancelled then, this function raises cancellation and returns
+      irrespective of the completion of `:param task:` (even though it is probably cancelled)
+
+    * Assumes that task will always re-raise the same cancelled error that was passed in, as per asyncio standard
+      if not this function does not work as expected
 
     Notes:
         Make sure that ``task`` is active and not done, if it's result already available then we may get an invalid
@@ -55,13 +62,42 @@ async def safe_cancel_task(task):
         task(asyncio.Task): task to cancel
     """
 
-    task.cancel(sentinel := object())
+    class CancelFlag(object):
+        task_name = None
+
+        def __repr__(self):
+            return f"<{self.__class__.__name__}(task_name={self.task_name},id={id(self)})>"
+
+    task.cancel(sentinel := CancelFlag())
+    sentinel.task_name = task.get_name()
+
+    f = asyncio.shield(task)
+
     try:
-        return await task
-    except asyncio.CancelledError as ce:
-        if any(ce.args) and (sentinel in ce.args):
+        await asyncio.sleep(0)
+        if task.done():
             return
-        raise
+
+        # it's not a good choice to pass cancelled error of outer function
+        # into an already-expected-to-be cancelled task
+        return await f  # wait until return
+    except asyncio.CancelledError as ce:
+        curr = asyncio.current_task()
+        if not task.done():
+            # this means `ce` is not raised by completion of task
+            # and `ce` belongs to current task
+            raise ce
+
+        try:
+            # we lose our sentinel inside shield as it plays cleverly with futures
+            task.exception()  # unwrap
+        except asyncio.CancelledError as ce_task:
+            if sentinel in ce_task.args:
+                if curr.cancelling():
+                    # edge case where task gets done immediately after cancellation
+                    # and `ce` belongs to current task
+                    raise ce
+                return
 
 
 def shorten_path(path: Path, max_length):

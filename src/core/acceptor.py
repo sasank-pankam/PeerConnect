@@ -37,6 +37,7 @@ async def initiate_acceptor(app_ctx: AppType):
     c_reg_handler(HEADERS.CMD_FILE_CONN, FileConnectionHandler(app_ctx.read_only()))
     c_reg_handler(HEADERS.CMD_RECV_DIR, DirConnectionHandler(app_ctx.read_only()))
     c_reg_handler(HEADERS.OTM_UPDATE_STREAM_LINK, OTMConnectionHandler())
+    c_reg_handler(HEADERS.PING, PingHandler(app_ctx.this_remote_peer))
 
     app_ctx.connections.dispatcher = connection_dispatcher
 
@@ -117,45 +118,51 @@ class ConnectionDispatcher(QueueMixIn, BaseDispatcher):
             self.park(event.connection)
             return
 
-        sub_task = asyncio.ensure_future(r)
         try:
-            await asyncio.shield(sub_task)
+            await asyncio.ensure_future(r)
+        finally:
+            await self._try_parking(handler, event.connection)
+
+    async def _try_parking(self, handler, connection):
+        our_task = asyncio.current_task()
+        cancelling = our_task.cancelling
+        conn_watcher = bandwidth.Watcher()
+
+        if cancelling():
+            await conn_watcher.request_closing(connection)
+            return
+
+        try:
+            await asyncio.wait_for(connection.lock.acquire(), 1)
+            connection.lock.release()
+        except TimeoutError:
+            _logger.warning(f"failed to acquire connection lock from {handler}, closing connection")
+            await conn_watcher.request_closing(connection)
+            # DESICION, whether we should forcefully release
+            # connection.lock.release() and park,
+            # or to close connection itself
+            return
         except CancelledError:
-            our_task = asyncio.current_task()
-
-            # THIS PIECE OF CODE: provides more accurate way to check of cancellation thing
-            # but are we breaking `protected` variable agreement ??, NEED TO BE REVIEWED
-
-            # if cancelled_error := getattr(our_task, '_cancelled_exc', None):
-            #     if cancelled_error is ce:  # ce is the CancelledError we caught
-            #         conn_watcher = bandwidth.Watcher()
-            #         await conn_watcher.request_closing(event.connection)
-            #         raise  # exit
-            #
-            # if cancelled_error := getattr(sub_task, '_cancelled_exc', None):
-            #     if cancelled_error is ce:
-            #         ...
-
-            if our_task.cancelling():
-                # if self.submit is cancelling; then request for closing of connection, as we are no longer
-                # interested in watching it
-                conn_watcher = bandwidth.Watcher()
-                # let other side know that we are done with this connection
-                await conn_watcher.request_closing(event.connection)
-                raise  # exit
-
-            if sub_task.cancelled():
-                # if the task we are awaiting on, got cancelled then we can expect that lock is released
-                assert event.connection.lock.locked() is False, "expected lock to be free as the task is done"
-        except Exception as exp:
-            # we can't afford exceptions here as they move into QueueMixIn
-            _logger.error(f"{handler}({event}) failed with \n", exc_info=exp)
-
-        async with event.connection:
-            pass
+            if cancelling():
+                await conn_watcher.request_closing(connection)
+                return
 
         # park connection once the underlying lock is released
-        self.park(event.connection)
+        self.park(connection)
+
+
+def PingHandler(this_peer):
+    async def handler(event: ConnectionEvent):
+        handshake = event.handshake
+        echo = WireData(
+            header=handshake.header,
+            peer_id=this_peer.peer_id,
+            msg_id=handshake.msg_id,
+        )
+        async with (conn := event.connection):
+            await conn.send(bytes(echo))
+
+    return handler
 
 
 @singleton_mixin
