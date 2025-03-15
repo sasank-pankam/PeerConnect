@@ -226,12 +226,18 @@ class Acceptor(AExitStackMixIn):
             await asyncio.sleep(0)
 
     def _start_socket(self):
-        sock = const.PROTOCOL.create_async_server_sock(
-            asyncio.get_running_loop(),
-            self.address,
-            family=const.IP_VERSION,
-            backlog=self.back_log
-        )
+        try:
+            sock = const.PROTOCOL.create_async_server_sock(
+                asyncio.get_running_loop(),
+                self.address,
+                family=const.IP_VERSION,
+                backlog=self.back_log
+            )
+        except OSError:
+            print(const.BIND_FAILED)
+            _logger.critical("failed to bind acceptor", exc_info=True)
+            exit(-1)
+
         self.main_socket = sock
         self._exit_stack.enter_context(sock)
 

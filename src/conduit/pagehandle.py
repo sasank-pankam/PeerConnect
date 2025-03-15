@@ -6,6 +6,7 @@ Interfacing with UI using websockets
 
 import asyncio
 import asyncio as _asyncio
+import sys
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import overload
 
@@ -205,7 +206,14 @@ async def _handle_client_exp_logging_wrapper(*args, **kwargs):
 
 @asynccontextmanager
 async def start_websocket_server():
-    start_server = await websockets.serve(_handle_client_exp_logging_wrapper, const.WEBSOCKET_BIND_IP, const.PORT_PAGE)
+    try:
+        start_server = await websockets.serve(_handle_client_exp_logging_wrapper, const.WEBSOCKET_BIND_IP,
+                                              const.PORT_PAGE)
+    except OSError:
+        print(const.BIND_FAILED)
+        logger.critical("failed to bind websocket", exc_info=True)
+        sys.exit(-1)
+
     logger.info(f"[PAGE HANDLE] websocket server started at ws://{const.WEBSOCKET_BIND_IP}:{const.PORT_PAGE}")
     try:
         async with start_server:
