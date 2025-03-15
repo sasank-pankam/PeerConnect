@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import traceback
 from asyncio import CancelledError
@@ -90,7 +91,7 @@ def initiate(states, app):
             eventloop.set_eager_task_factory()
             app.state_manager_handle = StateManager()
             runner.run(_async_initiate(app.read_only()))
-    except KeyboardInterrupt:
+    except BaseException:
         if const.debug:
             traceback.print_exc()
             print_str = f"{'-' * 80}\n" \
@@ -99,7 +100,7 @@ def initiate(states, app):
                         f"clean exit completed within {time.perf_counter() - cancellation_started:.6f}s\n"
             print(print_str)
 
-        exit(0)
+        return
 
 
 if __name__ == "__main__":

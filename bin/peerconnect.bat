@@ -11,6 +11,9 @@ set "flag_file=%script_dir%.setup_completed"
 set "app_module=src"
 set "PYTHONPATH=%base_dir%;%PYTHONPATH%"
 
+set "activate_path=%venv_dir%\Scripts\activate.bat"
+set "deactivate_path=%venv_dir%\Scripts\deactivate.bat"
+
 :: Check for existing setup
 if exist "%flag_file%" (
     echo Existing setup detected. Launching application...
@@ -52,7 +55,10 @@ if not exist "%venv_dir%" (
     echo Found an environment, skipping creation 
 )
 
-call "%venv_dir%\Scripts\activate.bat"
+call :checkvenv
+if errorlevel 1 (
+    exit /b "%errorlevel%"
+)
 :: TODO: fails if not Scripts dir found in venv
 echo Installing dependencies...
 echo Upgrading pip...
@@ -69,16 +75,34 @@ echo Setup completed successfully. Created verification flag.
 :: Launch application
 
 :execute
-call "%venv_dir%\Scripts\activate.bat" && (
-    cd /d "%base_dir%"
-    python -m "%app_module%"
-    call "%venv_dir%\Scripts\deactivate"
+call :checkvenv
+if errorlevel 1 (
+    exit /b "%errorlevel%"
 )
+cd /d "%base_dir%"
+python -m "%app_module%"
+call "%deactivate_path%"
+exit /b 0
+
+:checkvenv
+if not exist "!activate_path!" (
+    if exist "%venv_dir%\bin\activate" (
+        echo Virtual environment created is not purely based on Windows, check your Python path
+        rmdir /s /q "%venv_dir%"
+        exit /b 1
+
+    ) else (
+        echo "failed to activate venv, exiting"
+        exit /b 1
+    )
+    exit /b 0
+)
+call "%activate_path%"
 exit /b 0
 
 :: Cleanup
 :cleanup
-call "%venv_dir%\Scripts\deactivate"
+call "%deactivate_path%"
 
 echo.
 set /p "clear=Clear screen? [y/N]: "
