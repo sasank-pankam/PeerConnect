@@ -48,22 +48,26 @@ def _get_local_appdata():
 def set_paths():
     """
     Current Setup
-    * log config is present in applevel
+    * log config is present at applevel
     * basic config is present at local user data directories
     * all logs are written into local user data directories
+    * webpage at applevel
     """
-    const.PATH_CURRENT = Path(os.getcwd())
     path_app_data = _get_local_appdata()
     path_app_data.mkdir(exist_ok=True)
-    const.PATH_LOG = Path(path_app_data, 'logs')
-    const.PATH_LOG.mkdir(exist_ok=True)
-    const.PATH_PAGE = Path(const.PATH_CURRENT, 'webpage')
     config_path = Path(path_app_data, 'configs')
     config_path.mkdir(exist_ok=True)
+
+    const.PATH_LOG = Path(path_app_data, 'logs')
+
+    const.PATH_CURRENT = Path(os.getcwd())
+    const.PATH_LOG.mkdir(exist_ok=True)
+    const.PATH_PAGE = Path(const.PATH_CURRENT, 'webpage')
+    const.PATH_LOG_CONFIG = Path(const.PATH_CURRENT, 'configs', const.LOG_CONFIG_NAME)
+
     const.PATH_CONFIG_FILE = Path(config_path, const.DEFAULT_CONFIG_FILE_NAME)
     const.PATH_PROFILES = Path(config_path, 'profiles')
     const.PATH_PROFILES.mkdir(exist_ok=True)
-    const.PATH_LOG_CONFIG = Path(const.PATH_CURRENT, const.LOG_CONFIG_NAME)
     const.PATH_CONFIG = config_path
 
     downloads_path = Path(Path.home(), 'Downloads')
@@ -79,6 +83,8 @@ def set_paths():
         _logger.error(f"Error creating directory: {e} from set_paths()")
         const.PATH_DOWNLOAD = Path(path_app_data, 'downloads')
         const.PATH_DOWNLOAD.mkdir(exist_ok=True)
+
+    print_paths()
 
 
 async def load_configs(app: AppType):
