@@ -38,30 +38,53 @@ def print_app(app):
         return print(print_string)
 
 
+def _get_local_appdata():
+    if const.IS_WINDOWS:
+        return Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData" / "Local"), const.APP_NAME)
+    else:
+        return Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"), const.APP_NAME)
+
+
 def set_paths():
-    const.PATH_CURRENT = Path(os.getcwd())
-    const.PATH_LOG = Path(const.PATH_CURRENT, 'logs')
-    const.PATH_LOG.mkdir(exist_ok=True)
-    const.PATH_PAGE = Path(const.PATH_CURRENT, 'src', 'webpage')
-    config_path = Path(const.PATH_CURRENT, 'configs')
+    """
+    Current Setup
+    * log config is present at applevel
+    * basic config is present at local user data directories
+    * all logs are written into local user data directories
+    * webpage at applevel
+    """
+    path_app_data = _get_local_appdata()
+    path_app_data.mkdir(exist_ok=True)
+    config_path = Path(path_app_data, 'configs')
     config_path.mkdir(exist_ok=True)
+
+    const.PATH_LOG = Path(path_app_data, 'logs')
+
+    const.PATH_CURRENT = Path(os.getcwd())
+    const.PATH_LOG.mkdir(exist_ok=True)
+    const.PATH_PAGE = Path(const.PATH_CURRENT, 'webpage')
+    const.PATH_LOG_CONFIG = Path(const.PATH_CURRENT, 'configs', const.LOG_CONFIG_NAME)
+
     const.PATH_CONFIG_FILE = Path(config_path, const.DEFAULT_CONFIG_FILE_NAME)
     const.PATH_PROFILES = Path(config_path, 'profiles')
     const.PATH_PROFILES.mkdir(exist_ok=True)
-    const.PATH_LOG_CONFIG = Path(config_path, const.LOG_CONFIG_NAME)
     const.PATH_CONFIG = config_path
 
-    downloads_path = Path(os.path.expanduser('~'), 'Downloads')
+    downloads_path = Path(Path.home(), 'Downloads')
     # check if the directory exists
-    if not os.path.exists(downloads_path):
-        downloads_path = Path(os.path.expanduser('~'), 'Desktop')
+    if not downloads_path.exists():
+        downloads_path = Path(Path.home(), 'Desktop')
+
     const.PATH_DOWNLOAD = Path(os.path.join(downloads_path, const.APP_NAME))
 
     try:
         os.makedirs(const.PATH_DOWNLOAD, exist_ok=True)
     except OSError as e:
         _logger.error(f"Error creating directory: {e} from set_paths()")
-        const.PATH_DOWNLOAD = os.path.join(const.PATH_CURRENT, 'downloads')
+        const.PATH_DOWNLOAD = Path(path_app_data, 'downloads')
+        const.PATH_DOWNLOAD.mkdir(exist_ok=True)
+
+    print_paths()
 
 
 async def load_configs(app: AppType):
