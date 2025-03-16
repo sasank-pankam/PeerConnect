@@ -47,6 +47,10 @@ jobs:
         run: |
           Compress-Archive -Path dist/${{env.APP_NAME}} -DestinationPath ${{env.APP_NAME}}.zip
 
+      - name: Create source tarball for linux 
+        run: |
+          tar -czvf peerconnect.tar.gz *
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
