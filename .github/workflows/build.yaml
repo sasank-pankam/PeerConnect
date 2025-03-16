@@ -9,7 +9,7 @@ env:
   APP_NAME: "PeerConnect"
 
 jobs:
-  build:
+  build-win:
     runs-on: windows-latest
 
     steps:
@@ -47,10 +47,6 @@ jobs:
         run: |
           Compress-Archive -Path dist/${{env.APP_NAME}} -DestinationPath ${{env.APP_NAME}}.zip
 
-      - name: Create source tarball for linux 
-        run: |
-          tar -czvf peerconnect.tar.gz *
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -71,3 +67,22 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:    
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: release
+    
+      - name: Create source tarball for linux 
+        run: |
+          tar -czvf peerconnect.tar.gz *
+
+      - name: Upload Asset to Latest Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: peerconnect.tar.gz
+          tag_name: latest
+          token: ${{ secrets.GH_PAT }}
