@@ -1,8 +1,10 @@
 import ctypes
 import socket
 import struct
+import sys
 
 from src.avails.connect import IPAddress
+from src.avails import const
 
 IFF_LOOPBACK = 0x8
 IFF_UP = 0x1  # Interface is up.
@@ -12,37 +14,68 @@ IFF_RUNNING = 0x40
 def get_interfaces(
     address_family: socket.AF_INET | socket.AF_INET6,
 ) -> list[IPAddress]:
-    # Load the C library (adjust the name if needed on your system)
-    libc = ctypes.CDLL("libc.so.6")
+    try:
+        libc = ctypes.CDLL("libc.so.6")
+    except OSError:
+        libc = ctypes.CDLL("libc.dylib")  # For macOS
 
-    # Define the basic sockaddr structure
+    # Define sockaddr structure
     class sockaddr(ctypes.Structure):
-        _fields_ = [("sa_family", ctypes.c_ushort), ("sa_data", ctypes.c_char * 14)]
+        if const.IS_DARWIN:
+            _fields_ = [
+                ("sa_len", ctypes.c_uint8),
+                ("sa_family", ctypes.c_uint8),
+                ("sa_data", ctypes.c_char * 14),
+            ]
+        else:
+            _fields_ = [
+                ("sa_family", ctypes.c_ushort),
+                ("sa_data", ctypes.c_char * 14),
+            ]
 
-    # Define sockaddr_in for IPv4 addresses
+    # Define sockaddr_in for IPv4
     class sockaddr_in(ctypes.Structure):
-        _fields_ = [
-            ("sin_family", ctypes.c_short),
-            ("sin_port", ctypes.c_ushort),
-            ("sin_addr", ctypes.c_uint32),  # in_addr (IPv4 address)
-            ("sin_zero", ctypes.c_char * 8),
-        ]
+        if const.IS_DARWIN:
+            _fields_ = [
+                ("sin_len", ctypes.c_uint8),
+                ("sin_family", ctypes.c_uint8),
+                ("sin_port", ctypes.c_ushort),
+                ("sin_addr", ctypes.c_uint32),
+                ("sin_zero", ctypes.c_char * 8),
+            ]
+        else:
+            _fields_ = [
+                ("sin_family", ctypes.c_ushort),
+                ("sin_port", ctypes.c_ushort),
+                ("sin_addr", ctypes.c_uint32),
+                ("sin_zero", ctypes.c_char * 8),
+            ]
 
-    # Define in6_addr structure for IPv6 addresses
+    # Define in6_addr structure
     class in6_addr(ctypes.Structure):
         _fields_ = [("s6_addr", ctypes.c_ubyte * 16)]
 
-    # Define sockaddr_in6 for IPv6 addresses
+    # Define sockaddr_in6 for IPv6
     class sockaddr_in6(ctypes.Structure):
-        _fields_ = [
-            ("sin6_family", ctypes.c_short),
-            ("sin6_port", ctypes.c_ushort),
-            ("sin6_flowinfo", ctypes.c_uint32),
-            ("sin6_addr", in6_addr),
-            ("sin6_scope_id", ctypes.c_uint32),
-        ]
+        if const.IS_DARWIN:
+            _fields_ = [
+                ("sin6_len", ctypes.c_uint8),
+                ("sin6_family", ctypes.c_uint8),
+                ("sin6_port", ctypes.c_ushort),
+                ("sin6_flowinfo", ctypes.c_uint32),
+                ("sin6_addr", in6_addr),
+                ("sin6_scope_id", ctypes.c_uint32),
+            ]
+        else:
+            _fields_ = [
+                ("sin6_family", ctypes.c_ushort),
+                ("sin6_port", ctypes.c_ushort),
+                ("sin6_flowinfo", ctypes.c_uint32),
+                ("sin6_addr", in6_addr),
+                ("sin6_scope_id", ctypes.c_uint32),
+            ]
 
-    # Forward declaration for ifaddrs since it is self-referential
+    # Forward declaration for ifaddrs
     class ifaddrs(ctypes.Structure):
         pass
 
@@ -52,14 +85,10 @@ def get_interfaces(
         ("ifa_flags", ctypes.c_uint),
         ("ifa_addr", ctypes.POINTER(sockaddr)),
         ("ifa_netmask", ctypes.POINTER(sockaddr)),
-        (
-            "ifa_ifu",
-            ctypes.POINTER(sockaddr),
-        ),  # This field can hold the broadcast or destination address
+        ("ifa_ifu", ctypes.POINTER(sockaddr)),
         ("ifa_data", ctypes.c_void_p),
     ]
 
-    # Set up function prototypes for getifaddrs and freeifaddrs
     getifaddrs = libc.getifaddrs
     getifaddrs.argtypes = [ctypes.POINTER(ctypes.POINTER(ifaddrs))]
     getifaddrs.restype = ctypes.c_int
@@ -67,7 +96,6 @@ def get_interfaces(
     freeifaddrs = libc.freeifaddrs
     freeifaddrs.argtypes = [ctypes.POINTER(ifaddrs)]
 
-    """Retrieve IP addresses bound to each network interface, including scope IDs for IPv6."""
     ifap = ctypes.POINTER(ifaddrs)()
     if getifaddrs(ctypes.byref(ifap)) != 0:
         raise OSError("getifaddrs() call failed")
@@ -93,18 +121,14 @@ def get_interfaces(
                     iface.ifa_addr, ctypes.POINTER(sockaddr_in)
                 ).contents
                 ip_addr = socket.inet_ntoa(struct.pack("I", addr_in.sin_addr))
-
-                # -1 is just to fill the field but ipv4 donot have any scope_ids
                 scope_id = -1
-            elif family == address_family == socket.AF_INET6:  # for ip v6
+            elif family == address_family == socket.AF_INET6:
                 addr_in = ctypes.cast(
                     iface.ifa_addr, ctypes.POINTER(sockaddr_in6)
                 ).contents
-
                 ip_addr = socket.inet_ntop(
                     socket.AF_INET6, bytes(bytearray(addr_in.sin6_addr.s6_addr))
                 )
-
                 scope_id = addr_in.sin6_scope_id
             else:
                 p = iface.ifa_next

@@ -1,8 +1,7 @@
 import struct
 from asyncio import BaseTransport
-from typing import override
 
-from src.avails import WireData
+from src.avails import WireData, use
 from src.transfers import REQUESTS_HEADERS
 
 
@@ -45,7 +44,7 @@ class KademliaTransport(RequestsTransport):
     __slots__ = ()
     _trigger = REQUESTS_HEADERS.KADEMLIA
 
-    @override
+    @use.override
     def sendto(self, data: bytes, addr: tuple[str, int] | tuple[str, int, int, int] = None):
         formatted = bytes(WireData(data=data))
         return super().sendto(formatted, addr)

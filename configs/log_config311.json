@@ -30,13 +30,7 @@
       "formatter": "detailed",
       "level": "DEBUG"
     },
-    "queue_handler": {
-      "class": "logging.handlers.QueueHandler",
-      "handlers": [
-        "rfile_handler"
-      ]
-    },
-    "discovery_sub_handler": {
+    "discovery_handler": {
       "class": "logging.handlers.RotatingFileHandler",
       "level": "DEBUG",
       "formatter": "detailed",
@@ -44,22 +38,12 @@
       "maxBytes": 102400,
       "backupCount": 3,
       "encoding": "utf8"
-    },
-    "discovery_handler": {
-      "class": "logging.handlers.QueueHandler",
-      "handlers": [
-        "discovery_sub_handler"
-      ]
     }
   },
-  "queue_handlers": [
-    "queue_handler",
-    "discovery_handler"
-  ],
   "loggers": {
     "": {
       "handlers": [
-        "queue_handler",
+        "rfile_handler",
         "console"
       ],
       "level": "DEBUG"

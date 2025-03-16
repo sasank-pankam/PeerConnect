@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import traceback
 from contextlib import aclosing
 from pathlib import Path
 
@@ -10,7 +9,7 @@ from src.avails.exceptions import TransferRejected
 from src.conduit import webpage
 from src.core.app import ReadOnlyAppType, provide_app_ctx
 from src.core.connector import Connector
-from src.transfers import HEADERS
+from src.transfers import HEADERS, TransferState
 from src.transfers.files import DirReceiver, DirSender, rename_directory_with_increment
 from src.transfers.status import StatusMixIn
 
@@ -131,8 +130,10 @@ def DirConnectionHandler(app_ctx: ReadOnlyAppType):
                 _logger.info(f"directory received from {peer}")
                 transfers_book.add_to_completed(transfer_id, receiver)
         except Exception as e:
-            if const.debug:
-                traceback.print_exc()
-            print("*" * 80, e)  # debug
+            _logger.debug("receiving directory failed with", exc_info=e)
+            if receiver.state == TransferState.PAUSED:
+                transfers_book.add_to_continued(transfer_id, receiver)
+            if receiver.state == TransferState.ABORTING:
+                transfers_book.add_to_completed(transfer_id, receiver)
 
     return handler

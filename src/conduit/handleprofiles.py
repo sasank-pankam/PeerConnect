@@ -72,11 +72,17 @@ async def configure_further_profile_data(profiles_data):
             continue
 
         for header, content in profile_settings.items():
+            preferred_ip = interfaces.get_ip_with_ifname(profile_settings["INTERFACE"]["if_name"])
+            profile_settings["INTERFACE"] = getattr(preferred_ip, '_asdict')()
             await profile_object.edit_profile(header, content)
 
 
 async def set_selected_profile(page_data: DataWeaver):
     await _alignment_done.wait()
+    if PROFILE_WAIT.done():
+        logger.warning(f"current profile is already set {page_data}")
+        return    
+    
     await refresh_profile_list()
     for profile in ProfileManager.PROFILE_LIST:
         profile: ProfileManager

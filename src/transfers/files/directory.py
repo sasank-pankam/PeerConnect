@@ -2,8 +2,6 @@ import asyncio
 import struct
 from contextlib import aclosing
 from pathlib import Path
-from typing import override
-
 import umsgpack
 
 from src.avails import const, use
@@ -99,7 +97,7 @@ class DirSender(Sender):
 
         await self.send_func(b'\x00')  # code to inform end of transfer
 
-    @override
+    @use.override
     async def _send_file_item(self, file_path):
         await self.__send_code_parts(_FILE_CODE, file_path)
         file_item = FileItem(file_path, 0)
@@ -179,7 +177,7 @@ class DirReceiver(Receiver):
                 self._current_file = FileItem(full_path, 0)
                 yield full_path, None
 
-    @override
+    @use.override
     async def _recv_file_item(self):
         parent, item_name = await self._recv_parts()
         try:

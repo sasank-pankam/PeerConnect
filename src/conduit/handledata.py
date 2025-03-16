@@ -1,8 +1,7 @@
 import asyncio
-import traceback
 from pathlib import Path
 
-from src.avails import BaseDispatcher, DataWeaver, RemotePeer, const
+from src.avails import BaseDispatcher, DataWeaver, RemotePeer
 from src.conduit import logger
 from src.conduit.headers import HANDLE
 from src.core import peers
@@ -59,10 +58,8 @@ async def send_file(command_data: DataWeaver):
     try:
         async with send_files as sender:
             print(sender)  # debug
-    except OSError as e:
-        if const.debug:
-            traceback.print_exc()
-            print("{error}", e)  # debug
+    except OSError:
+        logger.error("send files failed with: ", exc_info=True)
 
 
 async def send_text(command_data: DataWeaver):

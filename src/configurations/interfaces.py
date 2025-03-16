@@ -8,7 +8,7 @@ Common Usage:
 """
 
 from src.avails import const
-from ..avails.connect import IPAddress
+from src.avails.connect import IPAddress
 
 if const.IS_WINDOWS:
     from ._interfaces_windows import get_interfaces as _get_interfaces

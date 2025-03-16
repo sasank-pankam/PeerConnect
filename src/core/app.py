@@ -135,8 +135,8 @@ def provide_app_ctx(func):
     """
 
     signature = inspect.signature(func)
-    ok = "name" in signature.parameters and (
-            signature.parameters["name"].kind in (
+    ok = "app_ctx" in signature.parameters and (
+            signature.parameters["app_ctx"].kind in (
         inspect.Parameter.KEYWORD_ONLY,
         inspect.Parameter.POSITIONAL_OR_KEYWORD
     )

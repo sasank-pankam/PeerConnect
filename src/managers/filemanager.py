@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import socket
-import traceback
 from contextlib import AsyncExitStack, aclosing, asynccontextmanager
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from src.core import peers
 from src.core.app import ReadOnlyAppType, provide_app_ctx
 from src.core.connector import Connector
 from src.transfers import HEADERS, TransferState, files, otm
+from src.transfers.otm.relay import OTMFilesRelay
 from src.transfers.status import StatusMixIn
 
 transfers_book = TransfersBookKeeper()
@@ -85,8 +85,6 @@ async def _sender_helper(file_sender, peer_id, *, this_peer_id):
             if accepted == b'\x00':
                 may_be_confirmed = False
         except OSError as oe:  # unable to connect
-            if const.debug:
-                traceback.print_exc()
             await webpage.transfer_confirmation(peer_id, file_sender.id, False)
             raise TransferIncomplete from oe
 
@@ -119,10 +117,12 @@ async def prepare_connection(sender_handle, this_peer_id):
         try:
             yield connection
         except OSError as oops:
+            oops.add_note(f"addr: {sender_handle.peer_obj.uri}")
             if not sender_handle.state == TransferState.PAUSED:
                 _logger.warning(f"reverting state to PREPARING, failed to connect to peer",
                                 exc_info=oops)
                 sender_handle.state = TransferState.PREPARING
+
             raise
 
 
@@ -226,6 +226,8 @@ def OTMConnectionHandler():
         _logger.info(f"updating otm connection from{event.connection.socket.getpeername()}")
         session_id = link_data['session_id']
         otm_relay = transfers_book.get_scheduled(session_id)
+        assert isinstance(otm_relay, OTMFilesRelay), "expected otm_relay object"
+
         if otm_relay:
             await otm_relay.otm_add_stream_link(event.connection, link_data)
         else:

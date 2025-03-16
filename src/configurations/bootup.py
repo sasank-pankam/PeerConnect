@@ -36,6 +36,7 @@ def _clear_logs():
 
 async def load_interfaces(app: AppType):
     app.interfaces = _interfaces.get_interfaces()
+    _logger.debug(f"loaded interfaces: {app.interfaces=}")
 
 
 def configure_this_remote_peer(app: AppType):

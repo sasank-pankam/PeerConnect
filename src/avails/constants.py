@@ -64,7 +64,7 @@ USING_IP_V4 = True
 USING_IP_V6 = False
 
 FILE_ERROR_EXT = ".pc-unconfirmedownload"
-debug = False
+debug = True
 
 PROTOCOL = None
 
@@ -86,7 +86,6 @@ MAX_TOTAL_CONNECTIONS = 40
 MAX_FRONTEND_MESSAGE_BUFFER_LEN = 1000
 MAX_CONCURRENT_MSG_PROCESSING = 6
 MAX_IDLE_TIME_FOR_CONN = 30
-
 
 GLOBAL_TTL_FOR_GOSSIP = 6
 NODE_POV_GOSSIP_TTL = 3
@@ -115,3 +114,9 @@ PING_TIME_CHECK_WINDOW = 3.0
 
 BYTES_PER_KB = 1024.0
 RATE_WINDOW = .0001
+
+BIND_FAILED = \
+    f"\n\t\t{'*' * 77}\n" \
+    "\n\t\tcannot bind address, try stopping other instances of this application\n" \
+    f"\n\t\t{'*' * 77}" \
+    "\n\t\tEXITING\n"

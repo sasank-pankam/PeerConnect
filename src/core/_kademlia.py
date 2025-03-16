@@ -3,9 +3,10 @@ All the stuff related to kademlia goes here
 """
 
 import asyncio
+import os
 import pickle
+import sys
 from pathlib import Path
-from typing import override
 
 import kademlia.node
 from kademlia import crawling, network, node, protocol, routing
@@ -25,7 +26,7 @@ from src.transfers.transports import KademliaTransport
 
 
 class RPCFindResponse(crawling.RPCFindResponse):
-    @override
+    @use.override
     def get_node_list(self):
         """
         Get the node list in the response.  If there's no value, this should
@@ -154,7 +155,7 @@ class KadProtocol(RPCCaller, RPCReceiver, protocol.KademliaProtocol):
                 for i in peer_list:
                     asyncio.create_task(self.call_store_peers_in_list(peer, list_key, [i, ]))
 
-    @override
+    @use.override
     def welcome_if_new(self, peer):
         if self.router.is_new_node(peer):
             self._send_peer_lists(peer)
@@ -166,13 +167,13 @@ class AnotherRoutingTable(routing.RoutingTable):
         super().__init__(*args, **kwargs)
         self._app_ctx: AppType = app_ctx
 
-    @override
+    @use.override
     def add_contact(self, peer: RemotePeer):
         super().add_contact(peer)
         self._app_ctx.peer_list.add_peer(peer)
         use.sync(webpage.update_peer(peer))
 
-    @override
+    @use.override
     def remove_contact(self, peer: RemotePeer):
         super().remove_contact(peer)
         peers.remove_peer(self._app_ctx, peer)
@@ -189,12 +190,12 @@ class PeerServer(network.Server):
         self.app_ctx = app_ctx
         self.state_dump_file = state_dump_file
 
-    @override
+    @use.override
     async def bootstrap_node(self, addr):
         result = await self.protocol.ping(addr, bytes(self.node))
         return RemotePeer.load_from(result[1]) if result[0] else None
 
-    @override
+    @use.override
     def _create_protocol(self):
         return self.protocol_class(self.app_ctx, self.node, self.storage, self.ksize)
 
@@ -246,7 +247,7 @@ class PeerServer(network.Server):
             if self.stopping:
                 break
             if await self.store_nodes_in_list(closest_list_id, [self.node]):
-                _logger.debug(f"added this peer object in list_id={closest_list_id}")  # debug
+                _logger.debug(f"added this peer object in list_id={closest_list_id}")
                 break
 
         # entering passive mode
@@ -293,7 +294,6 @@ class PeerServer(network.Server):
         """
         peer = RemotePeer(byte_id=byte_id)
         nodes = self.protocol.router.find_neighbors(peer)
-
         spider = NodeSpiderCrawl(self.protocol, peer, nodes,
                                  self.ksize, self.alpha)
         found_peers = await spider.find()
@@ -326,6 +326,9 @@ class PeerServer(network.Server):
         return False
 
     async def load_state(self):  # noqa
+        if not os.path.exists(self.state_dump_file):
+            return
+
         def _file_read_helper():
             with open(self.state_dump_file, 'rb') as file:
                 _data = pickle.load(file)

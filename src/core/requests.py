@@ -53,6 +53,7 @@ async def initiate(app: AppType):
         discovery_initiate,
         multicast_address,
         app,
+        transport,
         is_blocking=True,
     )
 
@@ -65,7 +66,7 @@ async def initiate(app: AppType):
     await app.state_manager_handle.put_state(discovery_state)
     await app.state_manager_handle.put_state(add_to_lists)
 
-    await app.exit_stack.enter_context(kad_server)
+    await app.exit_stack.enter_async_context(kad_server)
 
 
 async def setup_endpoint(bind_address, multicast_address, req_dispatcher):
@@ -163,7 +164,7 @@ class RequestsEndPoint(asyncio.DatagramProtocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        _logger.info(f"started requests endpoint at {transport.get_extra_info("socket")}")
+        _logger.info(f"started requests endpoint at {transport.get_extra_info('socket')}")
 
     def datagram_received(self, actual_data, addr):
         code, stripped_data = actual_data[:1], actual_data[1:]

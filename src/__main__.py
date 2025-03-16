@@ -4,12 +4,10 @@ import time
 import traceback
 from asyncio import CancelledError
 
-from src.core.app import App, AppType
-
 if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-    sys.path.append(os.getcwd())  # TODO: make this an environment variable
 
+from src.core.app import App, AppType
 from src.avails import const
 from src.conduit import pagehandle
 from src.configurations import bootup, configure
@@ -93,16 +91,16 @@ def initiate(states, app):
             eventloop.set_eager_task_factory()
             app.state_manager_handle = StateManager()
             runner.run(_async_initiate(app.read_only()))
-    except KeyboardInterrupt:
+    except BaseException:
         if const.debug:
             traceback.print_exc()
-            print_str = f"{"-" * 80}\n" \
+            print_str = f"{'-' * 80}\n" \
                         f"## PRINTING TRACEBACK, {const.debug=}\n" \
-                        f"{"-" * 80}\n" \
+                        f"{'-' * 80}\n" \
                         f"clean exit completed within {time.perf_counter() - cancellation_started:.6f}s\n"
             print(print_str)
 
-        exit(0)
+        return
 
 
 if __name__ == "__main__":

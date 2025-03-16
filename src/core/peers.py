@@ -4,8 +4,7 @@ Helper functions to deal with peers in network
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
-from typing import Optional, override
+from typing import AsyncIterator, Optional
 
 from kademlia import crawling
 
@@ -28,7 +27,7 @@ class PeerListGetter(crawling.ValueSpiderCrawl):
     async def find(self):
         return await self._find(self.protocol.call_find_peer_list)
 
-    @override
+    @use.override
     async def _handle_found_values(self, values):
         peer = self.nearest_without_value.popleft()
         if peer:
@@ -128,7 +127,7 @@ async def get_remote_peer(peer_id, *, app_ctx=None) -> Optional[RemotePeer]:
 
 def remove_peer(app_ctx, peer):
     """
-    Does Not directly remove peer
+    Does not directly remove peer
     Spawns a Task that tries to check connectivity status of peer
     If peer is reachable then it is not removed
     else peer is marked as offline
