@@ -33,7 +33,7 @@ jobs:
 
       - name: Move Config Directory
         run: |
-          xcopy .\config dist\peerconnect\config /E /I /Y
+          move .\config dist\peerconnect\config /E /I /Y
 
       - name: Zip the Application Folder
         run: |
@@ -46,5 +46,6 @@ jobs:
             peerconnect.zip 
             pc-setup.exe
           tag_name: ${{ github.ref_name }}
+          body: "Automated release generated from the 'release' branch."
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
