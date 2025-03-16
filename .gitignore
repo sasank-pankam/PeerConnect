@@ -3,6 +3,9 @@ configs/profiles/*
 logs
 *.log
 
+dist
+build
+
 .idea
 .vscode
 __pycache__/*

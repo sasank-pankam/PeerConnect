@@ -109,17 +109,11 @@ class ConnectionDispatcher(QueueMixIn, BaseDispatcher):
             return
 
         _logger.info(f"dispatching connection with header {event.handshake.header} to {handler}")
-        r = handler(event)
-
-        if not isawaitable(r):
-            async with event.connection:
-                pass
-            # park connection once the underlying lock is released
-            self.park(event.connection)
-            return
 
         try:
-            await asyncio.ensure_future(r)
+            r = handler(event)
+            if isawaitable(r):
+                await asyncio.ensure_future(r)
         finally:
             await self._try_parking(handler, event.connection)
 
