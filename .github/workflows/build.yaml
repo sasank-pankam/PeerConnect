@@ -25,7 +25,7 @@ jobs:
 
       - name: "Create setup.exe"
         run: |
-          pyinstaller --noconfirm --onefile --name pc-setup .\bin\setup.py
+          pyinstaller --noconfirm --onefile --name pc-setup --distpath . .\bin\setup.py
 
       - name: Build Executable with PyInstaller
         run: |
@@ -42,7 +42,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: 
+          files: |
             peerconnect.zip 
             pc-setup.exe
           tag_name: ${{ github.ref_name }}
