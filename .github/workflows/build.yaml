@@ -52,6 +52,9 @@ jobs:
             ${{env.APP_NAME}}.zip 
             pc-setup.exe
           name: "Release v1.0.${{github.run_number}}"
+          target_commitish: release
+          tag_name: "v1.0.${{github.run_number}}"
+
           body: |
             Automated release generated from the 'release' branch.
             ---
