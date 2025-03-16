@@ -33,7 +33,7 @@ jobs:
 
       - name: Move Config Directory
         run: |
-          move .\config dist\peerconnect\config /E /I /Y
+          move .\config dist\peerconnect\config /Y
 
       - name: Zip the Application Folder
         run: |
