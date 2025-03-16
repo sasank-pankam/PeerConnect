@@ -25,11 +25,12 @@ jobs:
 
       - name: "Create setup.exe"
         run: |
-          pyinstaller --noconfirm --onefile --name setup src/bin/setup.py
+          tree
+          pyinstaller --noconfirm --onefile --name setup ./src/bin/setup.py
 
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --noconfirm --name peerconnect src/main.py
+          pyinstaller --noconfirm --name peerconnect ./src/main.py
 
       - name: Move Config Directory
         run: |
