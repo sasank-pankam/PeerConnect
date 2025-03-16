@@ -41,6 +41,7 @@ jobs:
       - name: Move Config Directory
         run: |
           Move-Item -Path .\configs\ -Destination .\dist\${{env.APP_NAME}}\ -Force
+          Move-Item -Path .\webpage\ -Destination .\dist\${{env.APP_NAME}}\ -Force
       
       - name: Zip the Application Folder
         run: |
