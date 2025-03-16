@@ -16,7 +16,9 @@ async def set_ip_config(app_ctx: AppType):
     _clear_logs() if const.CLEAR_LOGS else None
 
     _logger.debug("waiting for profile selection")
+
     app_ctx.current_profile = await pagehandle.PROFILE_WAIT
+
     app_ctx.this_ip = app_ctx.current_profile.interface
 
     const.THIS_IP = app_ctx.current_profile.interface

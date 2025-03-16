@@ -77,7 +77,7 @@ class State:
         @functools.wraps(func)
         async def wrap_in_task(_func):
             f = use.wrap_with_tryexcept(_func, *self.args)
-            self._func_async_task = asyncio.create_task(f())
+            self._func_async_task = asyncio.create_task(f(), name=self.func_name)
 
         @functools.wraps(func)
         def wrap_in_thread(_func):

@@ -79,7 +79,7 @@ def DiscoveryReplyHandler(app_ctx: ReadOnlyAppType):
         if event.from_addr[0] == app_ctx.this_ip.ip:
             return
         connect_address = tuple(event.request["connect_uri"])
-        _logger.debug(f"bootstrapping kademlia {connect_address}")
+        _logger.debug(f"from: {event.from_addr}, {connect_address=}")
         if any(await app_ctx.kad_server.bootstrap([connect_address])):
             _logger.debug("bootstrapping completed")
 
@@ -159,7 +159,7 @@ async def send_discovery_requests(multicast_addr, app_ctx):
 
     await send_discovery_packet()
 
-    task = asyncio.create_task(enter_passive_mode())
+    task = asyncio.create_task(enter_passive_mode(), name="discovery-passive-mode")
 
     await asyncio.sleep(const.DISCOVER_TIMEOUT)  # wait a bit
     # stay in passive mode and keep sending discovery requests
@@ -169,13 +169,19 @@ async def send_discovery_requests(multicast_addr, app_ctx):
         _logger.debug(f"requesting user for peer name after waiting for {const.DISCOVER_TIMEOUT}s")
         await _try_asking_user(transport, ping_data)
 
-    await task
+    if not task.done():
+        await task
 
 
 async def _try_asking_user(transport, discovery_packet):
-    if peer_name := await webpage.ask_user_for_a_peer():
-        try:
-            async for family, sock_type, proto, _, addr in use.get_addr_info(peer_name, const.PORT_REQ):
-                transport.sendto(discovery_packet, addr)
-        except OSError:
-            await webpage.failed_to_reach(peer_name)
+    reason = None
+    while True:
+        if peer_name := await webpage.ask_user_peer_name_for_discovery(reason):
+            try:
+                async for family, sock_type, proto, _, addr in use.get_addr_info(peer_name, const.PORT_REQ):
+                    transport.sendto(discovery_packet, addr)
+                    return
+            except OSError:
+                reason = "failed to reach peer or name look up failed"
+        else:
+            break  # if the use is not interested in providing a username

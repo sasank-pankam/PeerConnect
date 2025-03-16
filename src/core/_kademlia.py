@@ -5,7 +5,6 @@ All the stuff related to kademlia goes here
 import asyncio
 import os
 import pickle
-import sys
 from pathlib import Path
 
 import kademlia.node
@@ -338,7 +337,10 @@ class PeerServer(network.Server):
         data = await asyncio.to_thread(_file_read_helper)
 
         if data['neighbors']:
-            await self.bootstrap(data['neighbors'])
+            try:
+                await self.bootstrap(data['neighbors'])
+            except Exception as exp:
+                _logger.debug("failed to bootstrap from previous state", exc_info=exp)
 
     async def __aenter__(self):
         self.stopping = False
@@ -367,7 +369,7 @@ def register_into_dispatcher(server, dispatcher: BaseDispatcher):
     dispatcher.register_handler(REQUESTS_HEADERS.KADEMLIA, handler)
 
 
-def prepare_kad_server(req_transport, app_ctx: ReadOnlyAppType):
+async def prepare_kad_server(req_transport, app_ctx: ReadOnlyAppType):
     kad_server = PeerServer(
         app_ctx=app_ctx,
         state_dump_file=Path(const.PATH_CONFIG, const.KAD_SERVER_STATE_FILE_NAME),
@@ -376,6 +378,7 @@ def prepare_kad_server(req_transport, app_ctx: ReadOnlyAppType):
     kad_server.node = app_ctx.this_remote_peer
     kad_server.start()
     kad_server.transport = KademliaTransport(req_transport)
+    await app_ctx.exit_stack.enter_async_context(kad_server)
     return kad_server
 
 

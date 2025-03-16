@@ -89,7 +89,7 @@ class FilesReceiver:
         # Internals:
         # we treat all the bytes related to different files as a single byte stream
         # upon reading different chunks and treating them as a single stream
-        # this code dynamically writes data into corresponding file on disk
+        # dynamically writes data into corresponding file on disk
         # based on the metadata received upfront
 
         #     chunk_size = 2B

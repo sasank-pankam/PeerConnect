@@ -69,7 +69,7 @@ async def gossip_search(search_string, *, app_ctx=None) -> AsyncIterator[RemoteP
 
 
 @provide_app_ctx
-def search_for_nodes_with_name(search_string, *, app_ctx):
+def search_for_peers_with_name(search_string, *, app_ctx):
     """
     searches for nodes relevant to given ``:param search_string:``
 

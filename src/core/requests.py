@@ -34,11 +34,17 @@ async def initiate(app: AppType):
 
     req_dispatcher = RequestsDispatcher()
     await app.exit_stack.enter_async_context(req_dispatcher)
+    try:
+        transport = await setup_endpoint(bind_address, multicast_address, req_dispatcher)
+        _logger.debug("created requests transport")
+    except OSError as oe:
+        print(const.BIND_FAILED)
+        _logger.critical("failed to bind acceptor", exc_info=True)
+        raise RuntimeError from oe
 
-    transport = await setup_endpoint(bind_address, multicast_address, req_dispatcher)
     req_dispatcher.transport = RequestsTransport(transport)
 
-    kad_server = _kademlia.prepare_kad_server(transport, app_ctx=app.read_only())
+    kad_server = await _kademlia.prepare_kad_server(transport, app_ctx=app.read_only())
     _kademlia.register_into_dispatcher(kad_server, req_dispatcher)
 
     await gossip.initiate_gossip(transport, req_dispatcher, app)
@@ -70,6 +76,8 @@ async def initiate(app: AppType):
 
 
 async def setup_endpoint(bind_address, multicast_address, req_dispatcher):
+    assert isinstance(bind_address, tuple) and isinstance(multicast_address,
+                                                          tuple), "expecting bind_address and multicast_address"
     loop = asyncio.get_running_loop()
 
     base_socket = UDPProtocol.create_async_server_sock(
