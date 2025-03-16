@@ -70,7 +70,8 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    steps:    
+    needs: build-win
+    steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
@@ -79,10 +80,9 @@ jobs:
       - name: Create source tarball for linux 
         run: |
           tar -czvf peerconnect.tar.gz *
-
+          
       - name: Upload Asset to Latest Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: peerconnect.tar.gz
-          tag_name: latest
-          token: ${{ secrets.GH_PAT }}
+        env:
+            GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh release upload v1.0.${{github.run_number}} peerconnect.tar.gz
