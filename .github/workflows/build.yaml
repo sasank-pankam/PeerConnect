@@ -25,16 +25,15 @@ jobs:
 
       - name: "Create setup.exe"
         run: |
-          tree
-          pyinstaller --noconfirm --onefile --name pc-setup ./bin/setup.py
+          pyinstaller --noconfirm --onefile --name pc-setup .\bin\setup.py
 
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --noconfirm --name peerconnect ./src/__main__.py
+          pyinstaller --noconfirm --name peerconnect .\src\__main__.py
 
       - name: Move Config Directory
         run: |
-          xcopy src\config dist\peerconnect\config /E /I /Y
+          xcopy .\config dist\peerconnect\config /E /I /Y
 
       - name: Zip the Application Folder
         run: |
