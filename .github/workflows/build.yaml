@@ -5,6 +5,9 @@ on:
     branches:
       - "release"
 
+env:
+  APP_NAME: "PeerConnect"
+
 jobs:
   build:
     runs-on: windows-latest
@@ -12,37 +15,53 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
+        with:
+          ref: release
+      
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.13"
+          cache: 'pip'
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: "Create setup.exe"
+      - name: "Create pc-setup"
         run: |
-          pyinstaller --noconfirm --onefile --name setup src/bin/setup.py
+          pyinstaller --noconfirm --onefile --name pc-setup --distpath . .\bin\setup.py
 
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --noconfirm --name peerconnect src/main.py
+          pyinstaller --noconfirm --name ${{env.APP_NAME}} .\src\__main__.py
 
       - name: Move Config Directory
         run: |
-          xcopy src\config dist\peerconnect\config /E /I /Y
-
+          Move-Item -Path .\configs\ -Destination .\dist\${{env.APP_NAME}}\ -Force
+      
       - name: Zip the Application Folder
         run: |
-          Compress-Archive -Path dist/peerconnect -DestinationPath peerconnect.zip
+          Compress-Archive -Path dist/${{env.APP_NAME}} -DestinationPath ${{env.APP_NAME}}.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: peerconnect.zip
-          tag_name: ${{ github.ref_name }}
+          files: |
+            ${{env.APP_NAME}}.zip 
+            pc-setup.exe
+          name: "Release v1.0.${{github.run_number}}"
+          target_commitish: release
+          tag_name: "v1.0.${{github.run_number}}"
+
+          body: |
+            Automated release generated from the 'release' branch.
+            ---
+            ## Authors
+            * [Sasank](https://github.com/sasank-pankam)
+            * [ShaikAli](https://github.com/ShaikAli65)
+
+          prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
