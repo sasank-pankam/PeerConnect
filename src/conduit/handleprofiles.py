@@ -80,8 +80,8 @@ async def configure_further_profile_data(profiles_data):
 async def set_selected_profile(page_data: DataWeaver):
     await _alignment_done.wait()
     if PROFILE_WAIT.done():
-        logger.warning(f"current profile is already set {page_data}")
-        return    
+        logger.warning(f"current profile is already set, ignoring choice {page_data}")
+        return
     
     await refresh_profile_list()
     for profile in ProfileManager.PROFILE_LIST:

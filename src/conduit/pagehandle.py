@@ -75,7 +75,7 @@ class FrontEndWebSocket:
                 msg = await self.buffer.get()
                 try:
                     logger.debug(f"[PAGE HANDLE] > data to page: {msg=}")
-                    await self.transport.send(str(msg))
+                    await self.transport.send(msg)
                 except websockets.WebSocketException:
                     await self._add_to_buffer(msg)
                     self._is_transport_connected = False
@@ -132,9 +132,9 @@ class FrontEndDispatcher(QueueMixIn, BaseDispatcher):
     async def submit(self, msg_packet: DataWeaver):
         """> Outgoing (to frontend)"""
         try:
-            return await self.registry[msg_packet.type].submit(msg_packet)
+            return await self.registry[msg_packet.type].submit(msg_packet.dump())
         except TransferIncomplete as ti:
-            logger.error(f"cannot send msg to frontend {msg_packet}", exc_info=ti)
+            logger.info(f"cannot send msg to frontend {msg_packet}", exc_info=ti)
 
 
 @singleton_mixin
@@ -148,7 +148,7 @@ class MessageFromFrontEndDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatch
         await self.registry[data_weaver.type](data_weaver)
 
 
-async def validate_connection(web_socket):
+async def validate_connection(web_socket, *, _exit_stack=_exit_stack):
     try:
         wire_data = await _asyncio.wait_for(web_socket.recv(), const.SERVER_TIMEOUT)
     except TimeoutError as te:
@@ -177,8 +177,10 @@ async def _handle_client(web_socket: WebSocketServerProtocol):
         return
     front_end_data_disp = MessageFromFrontEndDispatcher()
     is_registered_for_reply = front_end_data_disp.is_registered
+    recv = web_socket.recv
+
     while True:
-        data = await web_socket.recv()
+        data = await recv()
 
         logger.debug(f"[PAGE HANDLE] < data from page: {data=}")
         parsed_data = DataWeaver(serial_data=data)
@@ -228,7 +230,7 @@ async def run_page_server(host="localhost"):
     await asyncio.create_subprocess_exec(f"python3", *args)
 
 
-async def initiate_page_handle(app: AppType):
+async def initiate_page_handle(app: AppType, *, _exit_stack=_exit_stack):
     global PROFILE_WAIT
     PROFILE_WAIT = _asyncio.get_event_loop().create_future()
 
@@ -254,7 +256,7 @@ async def initiate_page_handle(app: AppType):
     msg_disp.register_handler(headers.DATA, data_disp.submit)
     msg_disp.register_handler(headers.SIGNALS, signal_disp.submit)
 
-    await run_page_server()
+    await run_page_server()  # TODO
     await _exit_stack.enter_async_context(msg_disp)
     await _exit_stack.enter_async_context(front_end)
     await _exit_stack.enter_async_context(start_websocket_server())
@@ -284,7 +286,9 @@ def front_end_data_dispatcher(data, expect_reply=False):
     """
     disp = FrontEndDispatcher()
     msg_disp = MessageFromFrontEndDispatcher()
+
     r = disp(data)
+
     if expect_reply:
         if data.msg_id is None:
             raise InvalidPacket("msg_id not found and expecting a reply")

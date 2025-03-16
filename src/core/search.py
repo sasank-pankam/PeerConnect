@@ -90,8 +90,9 @@ from typing import AsyncIterator
 
 from kademlia import crawling
 
-from src.avails import GossipMessage, RemotePeer, WireData, use
+from src.avails import GossipMessage, RemotePeer, WireData, const, use
 from src.avails.events import GossipEvent
+from src.avails.exceptions import SearchExhausted
 from src.core.app import provide_app_ctx
 from src.core.peerstore import node_list_ids
 from src.transfers import GOSSIP_HEADER
@@ -130,27 +131,35 @@ class SearchCrawler:
 
 class GossipSearch:
     class search_iterator(AsyncIterator):
-        timeout = 3
 
         def __init__(self, message_id):
             self.message_id = message_id
             self.reply_queue: asyncio.Queue[RemotePeer] = asyncio.Queue()
 
         def add_peer(self, p):
+            if not self._is_active:
+                raise SearchExhausted
+
             self.reply_queue.put_nowait(p)
 
         def __aiter__(self):
             self._start_time = asyncio.get_event_loop().time()
             return self
 
-        async def __anext__(self):
+        @property
+        def _is_active(self):
             current_time = asyncio.get_event_loop().time()
-            if current_time - self._start_time > self.timeout:
+            return not current_time - self._start_time > const.TIMEOUT_TO_GATHER_SEARCH_RESULTS
+
+        async def __anext__(self):
+            if self._is_active is False:
                 raise StopAsyncIteration
 
+            current_time = asyncio.get_event_loop().time()
             try:
                 search_response = await asyncio.wait_for(self.reply_queue.get(),
-                                                         timeout=self.timeout - (current_time - self._start_time))
+                                                         timeout=const.TIMEOUT_TO_GATHER_SEARCH_RESULTS - (
+                                                                     current_time - self._start_time))
                 return search_response
             except asyncio.TimeoutError:
                 raise StopAsyncIteration
@@ -181,6 +190,7 @@ class GossipSearch:
                 message=this_rp.serialized,
                 created=time.time(),
                 msg_id=reply_id,
+                peer_id=this_rp.peer_id,
                 ttl=1,
             )
         )
@@ -202,12 +212,15 @@ class GossipSearch:
 
     @classmethod
     def reply_arrived(cls, reply_data: GossipMessage, addr):
-        # Dock.global_gossip.message_arrived(reply_data, addr)
         try:
             result_iter = cls._message_state_dict[reply_data.id]
             if m := reply_data.message:
                 m = RemotePeer.load_from(m)
-            result_iter.add_peer(m)
+            try:
+                result_iter.add_peer(m)
+            except SearchExhausted:
+                _logger.debug(f"search iterator id={reply_data.id} exhausted, removing")
+                cls._message_state_dict.pop(reply_data.id)
         except KeyError as ke:
             _logger.debug("[GOSSIP][SEARCH] invalid gossip search response id", exc_info=ke)
 
