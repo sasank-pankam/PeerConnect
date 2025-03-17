@@ -1,0 +1,40 @@
+name: Build and Release setup file
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+
+env:
+  APP_NAME: "PeerConnect"
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Create pc-setup
+        run: |
+          pyinstaller --noconfirm --onefile --name pc-setup --distpath . .\bin\setup.py
+
+      - name: Upload Asset to Latest Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh release upload v1.0.${{github.run_number}} pc-setup.exe
