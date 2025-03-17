@@ -1,5 +1,5 @@
 from src.avails import BaseDispatcher, GossipMessage, const
-from src.avails.events import GossipEvent
+from src.avails.events import GossipEvent, RequestEvent
 from src.avails.mixins import QueueMixIn
 from src.core import search
 from src.core.app import AppType, ReadOnlyAppType
@@ -35,7 +35,9 @@ def GlobalGossipMessageHandler(app_ctx: ReadOnlyAppType):
 
 
 class GossipDispatcher(QueueMixIn, BaseDispatcher):
-    async def submit(self, event):
+    """Dispatches gossip messages from multiplexed requests endpoint"""
+
+    async def submit(self, event: RequestEvent):
         gossip_message = GossipMessage(event.request)
         handler = self.registry[gossip_message.header]
         g_event = GossipEvent(gossip_message, event.from_addr)
@@ -64,4 +66,3 @@ async def initiate_gossip(data_transport, req_dispatcher, app_ctx: AppType):
     await app_ctx.exit_stack.enter_async_context(g_dispatcher)
     app_ctx.gossip.dispatcher = g_dispatcher
     return g_dispatcher
-
