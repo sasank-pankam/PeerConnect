@@ -252,7 +252,7 @@ def run_page_server(host="localhost", _exit_stack=_exit_stack):
             await loop.run_in_executor(pool, _http_server, host, const.PORT_PAGE_SERVE, const.PATH_PAGE)
 
     run_server = asyncio.create_task(_helper(), name="http-demon-for-frontend")
-    _exit_stack.callback(use.safe_cancel_task, run_server)
+    _exit_stack.push_async_callback(use.safe_cancel_task, run_server)
 
 
 async def initiate_page_handle(app: AppType, *, _exit_stack=_exit_stack):

@@ -146,6 +146,8 @@ class RequestsDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
 
         try:
             await f if inspect.isawaitable(f := handler(req_event)) else None
+        except RuntimeError:
+            await self._handle_runtime_error(_logger)
         except Exception as e:
             # we can't afford exceptions here as they move into QueueMixIn
             _logger.error(f"{handler}({req_event}) failed with \n", exc_info=e)
@@ -158,7 +160,7 @@ class RequestsDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
 
 
 class RequestsEndPoint(asyncio.DatagramProtocol):
-    __slots__ = 'transport', 'dispatcher', "_addr_tuple"
+    __slots__ = 'transport', 'dispatcher', "_app_ctx"
 
     def __init__(self, dispatcher, app_ctx):
         """A Requests Endpoint
@@ -173,13 +175,16 @@ class RequestsEndPoint(asyncio.DatagramProtocol):
 
         self.transport = None
         self.dispatcher = dispatcher
-        self._addr_tuple = app_ctx.addr_tuple
+        self._app_ctx = app_ctx
 
     def connection_made(self, transport):
         self.transport = transport
         _logger.info(f"started requests endpoint at {transport.get_extra_info('socket')}")
 
     def datagram_received(self, actual_data, addr):
+        if self._app_ctx.finalizing.is_set():
+            _logger.warning(f"application is finalizing, ignoring request packet from: {addr}")
+            return
         code, stripped_data = actual_data[:1], actual_data[1:]
         try:
             req_data = unpack_datagram(stripped_data)
@@ -187,7 +192,7 @@ class RequestsEndPoint(asyncio.DatagramProtocol):
             _logger.info(f"error:", exc_info=ip)
             return
 
-        event = RequestEvent(root_code=code, request=req_data, from_addr=self._addr_tuple(*addr[:2]))
+        event = RequestEvent(root_code=code, request=req_data, from_addr=self._app_ctx.addr_tuple(*addr[:2]))
         self.dispatcher(event)
 
 

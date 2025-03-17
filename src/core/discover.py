@@ -120,6 +120,8 @@ class DiscoveryDispatcher(QueueMixIn, ReplyRegistryMixIn, BaseDispatcher):
         _logger.debug(f"dispatching request {handle}")
         try:
             await handle(event)
+        except RuntimeError:
+            await self._handle_runtime_error(_logger)
         except Exception as exp:
             _logger.error(f"{handle} failed with :", exc_info=exp)
 
