@@ -40,4 +40,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          gh release upload v1.0.${{inputs.tagName}} pc-setup.exe
+          gh release upload ${{inputs.tagName}} pc-setup.exe
