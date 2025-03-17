@@ -3,12 +3,8 @@ name: Build and Release setup file
 on:
   workflow_dispatch:
     inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        default: 'warning'
       tagName:
-        description: "tag name to upload executable"
+        description: "Tag name to upload executable"
         required: true
 
 env:
@@ -20,6 +16,7 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -36,8 +33,24 @@ jobs:
         run: |
           pyinstaller --noconfirm --onefile --name pc-setup --distpath . .\bin\setup.py
 
-      - name: Upload Asset to Latest Release
+      - name: Delete Existing Asset (if exists)
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          gh release upload ${{inputs.tagName}} pc-setup.exe
+          ASSET_NAME="pc-setup.exe"
+          TAG_NAME="${{ inputs.tagName }}"
+          RELEASE_ID=$(gh release view $TAG_NAME --json id -q ".id")
+          ASSET_ID=$(gh api repos/${{ github.repository }}/releases/$RELEASE_ID/assets --jq ".[] | select(.name == \"$ASSET_NAME\").id")
+
+          if [ -n "$ASSET_ID" ]; then
+            echo "Deleting existing asset: $ASSET_NAME"
+            gh api --method DELETE repos/${{ github.repository }}/releases/assets/$ASSET_ID
+          fi
+        shell: bash
+
+      - name: Upload Asset to Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh release upload ${{ inputs.tagName }} pc-setup.exe --clobber
+        shell: bash
