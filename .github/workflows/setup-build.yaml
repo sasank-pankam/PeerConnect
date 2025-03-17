@@ -7,6 +7,9 @@ on:
         description: 'Log level'
         required: true
         default: 'warning'
+      tagName:
+        description: "tag name to upload executable"
+        required: true
 
 env:
   APP_NAME: "PeerConnect"
@@ -37,4 +40,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          gh release upload v1.0.${{github.run_number}} pc-setup.exe
+          gh release upload v1.0.${{inputs.tagName}} pc-setup.exe
