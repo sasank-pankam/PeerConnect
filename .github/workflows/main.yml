@@ -17,11 +17,11 @@ jobs:
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
-        
       - name: Create Pull Request
         # env:
           # GH_TOKEN: ${{ github.token }}
         run: |
+          echo ${{ github.repository }}:${{ env.SRC_BRANCH }}
           gh pr create \
             --repo "${{ env.BASE_REPO }}" \
             --head "${{ github.repository }}:${{ env.SRC_BRANCH }}" \
