@@ -24,7 +24,7 @@ jobs:
           echo ${{ github.repository }}:${{ env.SRC_BRANCH }}
           gh pr create \
             --repo "${{ env.BASE_REPO }}" \
-            --head "${{ github.repository }}:${{ env.SRC_BRANCH }}" \
+            --head "${{ github.repository_owner }}:${{ env.SRC_BRANCH }}" \
             --base "${{ env.TGT_BRANCH }}" \
             --title "Auto PR: Sync ${{ env.SRC_BRANCH }} from Fork" \
             --body "Automated PR created from forked frontend build repo."
