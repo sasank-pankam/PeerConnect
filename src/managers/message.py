@@ -1,3 +1,18 @@
+"""Messages dispatchers and senders
+
+Working:
+
+* MsgDispatcher
+    - CMD_TEXT : MessageHandler
+
+* ConnectionsDispatcher
+    - CMD_MSG_CONN: MessageConnHandler
+    - PING: PingHandler
+
+* MessageConnHandler
+    Reads stream, creates message events, calls message dispatcher to dispatch message events
+
+"""
 import asyncio
 import logging
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -160,6 +175,7 @@ async def get_msg_conn(peer: RemotePeer, *, app_ctx=None):
 
 class MsgSender:
     _message_senders = {}
+
     __slots__ = "peer", "_msg_queue", "_connection", "_connected", "_started", "_sender_task", "_finalized"
 
     def __init__(self, peer_obj):
@@ -177,8 +193,6 @@ class MsgSender:
             self._connection = connection
 
         self._connected.set()
-
-        await webpage.peer_connected(self.peer)
 
     async def _message_sender(self):
         self._started = True
@@ -219,7 +233,7 @@ class MsgSender:
                 if not self.peer.is_online:
                     break
             except OSError:
-                await webpage.failed_to_reach(peer=self.peer)
+                await webpage.failed_to_reach(self.peer.peer_id)
                 await asyncio.sleep(timeout)
 
     async def send(self, msg):
@@ -239,9 +253,11 @@ class MsgSender:
         return self._connected.is_set()
 
     async def __aenter__(self):
-        self._sender_task = asyncio.create_task(self._sender_manager())
+        self._sender_task = asyncio.create_task(self._sender_manager(), name=f"message-sender-{self.peer.ip}")
 
     async def stop(self):
+        self._message_senders.pop(self.peer.peer_id)
+
         self._msg_queue.put_nowait(None)
         await asyncio.sleep(0)
         await use.safe_cancel_task(self._sender_task)
@@ -250,7 +266,6 @@ class MsgSender:
             _logger.warning(f"message queue not empty, discarding buffer {self._msg_queue}")
 
         self._connected.clear()
-        self._message_senders.pop(self.peer.peer_id)
         self._connection = None
         self._finalized = True
 
@@ -259,22 +274,42 @@ class MsgSender:
             return
         await self.stop()
 
+    def __repr__(self):
+        return f"<MsgSender(peer={self.peer}, connected={self.is_connected}, queued={self._msg_queue.qsize()})>"
+
+
+async def connect_ahead(peer_id):
+    if sender := MsgSender.get_sender(peer_id):
+        if sender.peer.is_online and sender.is_connected:
+            _logger.debug(f"not connecting again, already connected: {sender=!r}")
+            return
+
+    peer_obj = await peers.get_remote_peer(peer_id)
+    _logger.info(f"connecting {peer_obj} for messages")
+    sender = MsgSender(peer_obj)
+    try:
+        await sender.connect()
+    except OSError:
+        await sender.stop()
+        _logger.debug(f"failed to connect {peer_obj}, initiating a connectivity check")
+        return False
+
+    await _exit_stack.enter_async_context(sender)
+    return True
+
 
 async def send_message(msg, peer_id):
     """Sends message to peer
 
     Args:
+        msg(str): message to send
         peer_id(str): peer id to send to
-        msg(WireData): message to send
     """
 
     if sender := MsgSender.get_sender(peer_id):
-        await sender.send(bytes(msg))
+        _logger.debug(f"found msg sender for {peer_id}, sending message")
+        await sender.send(msg.encode())
         return
 
-    peer_obj = await peers.get_remote_peer(peer_id)
-
-    sender = MsgSender(peer_obj)
-    await sender.connect()
-    await _exit_stack.enter_async_context(sender)
+    await connect_ahead(peer_id)
     await send_message(msg, peer_id)

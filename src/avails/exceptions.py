@@ -48,5 +48,9 @@ class ResourceBusy(Exception):
 
 
 class RemotePeerNotFound(Exception):
-    """RemotePeer object not found any where"""
+    """RemotePeer object not found anywhere"""
     peer_id: str
+
+
+class SearchExhausted(Exception):
+    """Search iterator is expired, cannot be iterated"""

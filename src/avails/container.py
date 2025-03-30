@@ -12,7 +12,14 @@ This module contains simple storages used across the peer connect
 2. PeerDict
 """
 
-match_type_hint = r":\s*([A-Za-z_]\w*(?:\s*\|\s*[A-Za-z_]\w*)*)(?=[,)])"
+if TYPE_CHECKING:
+    from src.avails import RemotePeer
+
+    RemotePeer = RemotePeer
+else:
+    RemotePeer = None
+
+__match_type_hint = r":\s*([A-Za-z_]\w*(?:\s*\|\s*[A-Za-z_]\w*)*)(?=[,)])"
 
 
 # (self, peer_id:  str, transfer_handle: HasID | HasIdProperty)
@@ -25,12 +32,6 @@ class PeerDict(dict):
         super().__init__()
         # self.__lock = threading.Lock()
         self.__lock = asyncio.Lock()
-
-    if TYPE_CHECKING:
-        from src.avails import RemotePeer
-        RemotePeer = RemotePeer
-    else:
-        RemotePeer = None
 
     def get_peer(self, peer_id) -> RemotePeer:
         return self.get(peer_id, None)

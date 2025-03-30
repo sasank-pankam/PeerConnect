@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 
 from src.avails import BaseDispatcher, DataWeaver, RemotePeer
-from src.conduit import logger
+from src.conduit import logger, webpage
 from src.conduit.headers import HANDLE
 from src.core import peers
 from src.managers import directorymanager, filemanager, message
@@ -24,8 +24,16 @@ class FrontEndDataDispatcher(BaseDispatcher):
                 HANDLE.SEND_FILE: send_file,
                 HANDLE.SEND_TEXT: send_text,
                 HANDLE.SEND_FILE_TO_MULTIPLE_PEERS: send_files_to_multiple_peers,
+                HANDLE.CONNECT_USER: connect_user
             }
         )
+
+
+async def connect_user(data: DataWeaver):
+    if await message.connect_ahead(data.peer_id):
+        await webpage.peer_connected(data.peer_id)
+    else:
+        await webpage.failed_to_reach(data.peer_id)
 
 
 async def new_dir_transfer(command_data: DataWeaver):
@@ -63,7 +71,10 @@ async def send_file(command_data: DataWeaver):
 
 
 async def send_text(command_data: DataWeaver):
-    return await message.send_message(command_data.content, command_data.peer_id)
+    peer_id = command_data.peer_id
+    if isinstance(peer_id, list):
+        peer_id = peer_id[0]
+    return await message.send_message(command_data.content, peer_id)
 
 
 async def send_files_to_multiple_peers(command_data: DataWeaver):

@@ -7,7 +7,6 @@ import socket
 import struct
 import subprocess
 import sys
-import threading
 import traceback
 import typing
 import uuid
@@ -396,8 +395,6 @@ def search_relevant_peers(peer_list, search_string):
     Yields:
         list: peers
     """
-    if not hasattr(peer_list, '_gil_safe'):  # Check if GIL safety has been determined
-        peer_list._gil_safe = hasattr(threading, 'get_ident')  # Check for GIL
 
     peer_ids = list(peer_list.keys())
 
