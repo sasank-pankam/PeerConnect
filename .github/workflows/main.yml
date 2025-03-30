@@ -1,0 +1,36 @@
+name: Raise PR to original repo on frontend build commit
+on:
+  push:
+    branches:
+      - "actions-test"
+  workflow_dispatch:
+
+jobs:
+  raise-pr:
+    runs-on: ubuntu-latest
+    env:
+      BASE_REPO: "ShaikAli65/PeerConnect"
+      SRC_BRANCH: "actions-test"
+      TGT_BRANCH: "dev"
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+        
+      - name: Add original repo as upstream & fetch latest changes
+        run: |
+          git remote add upstream "https://github.com/${{ env.BASE_REPO }}.git"
+          git checkout ${{env.SRC_BRANCH}}  
+          if ! git pull upstream dev --ff-only; then
+            echo "Failed to pull from upstream/dev. Stopping build."
+            exit 1
+          fi
+
+      - name: Create Pull Request
+        run: |
+          gh pr create \
+            --repo "${{ env.BASE_REPO }}" \
+            --head "${{ github.repository }}:${{ env.SRC_BRANCH }}" \
+            --base "${{ env.TGT_BRANCH }}" \
+            --title "Auto PR: Sync ${{ env.SRC_BRANCH }} from Fork" \
+            --body "Automated PR created from forked frontend build repo."
